@@ -1,3 +1,4 @@
+#[derive(Clone, Copy)]
 pub struct NodeId(pub usize);
 
 impl NodeId {

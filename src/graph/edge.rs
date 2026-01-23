@@ -1,5 +1,6 @@
 use crate::graph::node::NodeId;
 
+#[derive(Clone, Copy)]
 pub struct EdgeId(pub usize);
 
 impl EdgeId {
@@ -19,5 +20,13 @@ pub struct Edge {
 impl Edge {
     pub fn new(id: EdgeId, from: NodeId, to: NodeId, multiplier: f64) -> Self {
         Self { id, from, to, multiplier }
+    }
+
+    pub fn id(&self) -> EdgeId {
+        self.id
+    }
+    
+    pub fn from(&self) -> NodeId {
+        self.from
     }
 }
