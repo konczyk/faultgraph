@@ -15,12 +15,21 @@ impl NodeState {
         self.load
     }
 
+    pub fn health(&self) -> f64 {
+        self.health
+    }
+
     pub fn inject_load(&mut self, load: f64) {
         self.load += load;
+    }
+
+    pub fn set_health(&mut self, health: f64) {
+        self.health = health.max(0.0)
     }
 
     pub fn is_healthy(&self) -> bool {
         self.health > 0.0
     }
+
 }
 

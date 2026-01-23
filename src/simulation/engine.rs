@@ -1,5 +1,6 @@
 use crate::graph::edge::EdgeId;
 use crate::graph::graph::Graph;
+use crate::graph::node::NodeId;
 use crate::scenario::scenario::Scenario;
 use crate::state::snapshot::Snapshot;
 
@@ -33,6 +34,12 @@ impl SimulationEngine {
         let mut new_node_states = self.current_snapshot.node_states().clone();
         new_node_states.iter_mut().enumerate().for_each(|(i, n)| {
             n.inject_load(prop[i]);
+            let utilization = n.load() / self.graph.node_by_id(NodeId(i)).capacity();
+            let k = 0.1;
+            if utilization > 1.0 {
+                let damage =  k * (utilization - 1.0);
+                n.set_health(n.health() - damage);
+            }
         });
 
         self.current_snapshot = Snapshot::new(

@@ -22,4 +22,8 @@ impl Node {
             capacity
         }
     }
+
+    pub fn capacity(&self) -> f64 {
+        self.capacity
+    }
 }
