@@ -1,4 +1,4 @@
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct NodeId(pub usize);
 
 impl NodeId {
@@ -15,12 +15,16 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(id: NodeId, name: impl Into<String>, capacity: f64) -> Self {
+    pub fn new(id: NodeId, name: String, capacity: f64) -> Self {
         Self {
             id,
             name: name.into(),
             capacity
         }
+    }
+    
+    pub fn name(&self) -> &str {
+        &self.name.as_str()
     }
 
     pub fn capacity(&self) -> f64 {

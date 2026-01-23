@@ -14,6 +14,10 @@ impl SimulationEngine {
     pub fn new(graph: Graph, initial_snapshot: Snapshot, scenario: Box<dyn Scenario>) -> Self {
         Self { graph, current_snapshot: initial_snapshot, scenario }
     }
+    
+    pub fn graph(&self) -> &Graph {
+        &self.graph
+    }
 
     pub fn step(&mut self) {
         let states = self.current_snapshot.node_states();

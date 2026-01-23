@@ -19,6 +19,14 @@ impl Graph {
             adj
         }
     }
+    
+    pub fn nodes(&self) -> &[Node] {
+        &self.nodes
+    }
+
+    pub fn edges(&self) -> &[Edge] {
+        &self.edges
+    }
 
     pub fn node_by_id(&self, id: NodeId) -> &Node {
         &self.nodes[id.index()]
