@@ -10,5 +10,13 @@ impl NodeState {
     pub fn new(load: f64, health: f64) -> Self {
         Self { load, health }
     }
+
+    pub fn reset_load(&mut self) {
+        self.inject_load(0.0);
+    }
+
+    pub fn inject_load(&mut self, load: f64) {
+        self.load = load;
+    }
 }
 

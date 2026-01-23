@@ -1,3 +1,4 @@
+use crate::graph::node::NodeId;
 use crate::state::edge_state::EdgeState;
 use crate::state::node_state::NodeState;
 
@@ -11,16 +12,24 @@ impl Snapshot {
     pub fn new(turn: usize, node_states: Vec<NodeState>, edge_states: Vec<EdgeState>) -> Self {
         Self { turn, node_states, edge_states }
     }
-    
+
     pub fn turn(&self) -> usize {
         self.turn
     }
-    
+
     pub fn node_states(&self) -> &Vec<NodeState> {
         &self.node_states
     }
 
     pub fn edge_states(&self) -> &Vec<EdgeState> {
         &self.edge_states
+    }
+
+    pub fn reset_loads(&mut self) {
+        self.node_states.iter_mut().for_each(|n| n.reset_load())
+    }
+
+    pub fn inject_load(&mut self, node: NodeId, load: f64) {
+        self.node_states[node.index()].inject_load(load);
     }
 }
