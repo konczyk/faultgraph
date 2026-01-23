@@ -26,32 +26,41 @@ fn build_header(app: &'_ App) -> Block<'_> {
 }
 
 fn build_node_table(app: &'_ App) -> Table<'_> {
-    let snapshot = app.engine.current_snapshot();
+    let states = app.engine.current_snapshot().node_states();
     let graph = app.engine.graph();
 
-    let rows = snapshot.node_states()
+    let mut rows = states
         .iter()
         .enumerate()
         .map(|(i, state)| {
             let node = graph.node_by_id(NodeId(i));
-            let utilization = if node.capacity() > 0.0 {
-                state.load() / node.capacity()
-            } else {
-                0.0
-            };
-
-            Row::new(vec![
-                Cell::from(i.to_string()),
-                Cell::from(node.name()),
-                Cell::from(format!("{:.1}", state.load())),
-                Cell::from(format!("{:.1}", node.capacity())),
-                Cell::from(format!("{:.2}", state.health())),
-                Cell::from(format!("{:.2}", utilization)),
-            ])
-        });
+            (
+                i,
+                if node.capacity() > 0.0 {
+                    state.load() / node.capacity()
+                } else {
+                    0.0
+                }
+            )
+        })
+        .collect::<Vec<(usize, f64)>>();
+    rows.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
     Table::new(
-        rows,
+        rows.iter()
+            .map(|(i, utilization)| {
+                let node = graph.node_by_id(NodeId(*i));
+                let state = &states[*i];
+
+                Row::new(vec![
+                    Cell::from(i.to_string()),
+                    Cell::from(node.name()),
+                    Cell::from(format!("{:.1}", state.load())),
+                    Cell::from(format!("{:.1}", node.capacity())),
+                    Cell::from(format!("{:.2}", state.health())),
+                    Cell::from(format!("{:.2}", utilization)),
+                ])
+            }),
         [
             Constraint::Length(4),
             Constraint::Length(16),
