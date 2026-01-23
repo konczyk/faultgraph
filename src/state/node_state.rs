@@ -1,3 +1,4 @@
+#[derive(Clone, Copy)]
 pub struct NodeState {
     /// load >= 0.0
     load: f64,
