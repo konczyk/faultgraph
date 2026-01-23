@@ -31,4 +31,8 @@ impl Graph {
     pub fn outgoing(&self, id: NodeId) -> &[EdgeId] {
         &self.adj[id.index()]
     }
+
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
 }

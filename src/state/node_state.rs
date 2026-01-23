@@ -11,12 +11,16 @@ impl NodeState {
         Self { load, health }
     }
 
-    pub fn reset_load(&mut self) {
-        self.inject_load(0.0);
+    pub fn load(&self) -> f64 {
+        self.load
     }
 
     pub fn inject_load(&mut self, load: f64) {
-        self.load = load;
+        self.load += load;
+    }
+
+    pub fn is_healthy(&self) -> bool {
+        self.health > 0.0
     }
 }
 

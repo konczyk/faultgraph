@@ -25,8 +25,16 @@ impl Edge {
     pub fn id(&self) -> EdgeId {
         self.id
     }
-    
+
     pub fn from(&self) -> NodeId {
         self.from
+    }
+
+    pub fn to(&self) -> NodeId {
+        self.to
+    }
+
+    pub fn multiplier(&self) -> f64 {
+        self.multiplier
     }
 }

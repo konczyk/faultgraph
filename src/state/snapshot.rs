@@ -1,3 +1,4 @@
+use crate::graph::edge::Edge;
 use crate::graph::node::NodeId;
 use crate::state::edge_state::EdgeState;
 use crate::state::node_state::NodeState;
@@ -25,11 +26,4 @@ impl Snapshot {
         &self.edge_states
     }
 
-    pub fn reset_loads(&mut self) {
-        self.node_states.iter_mut().for_each(|n| n.reset_load())
-    }
-
-    pub fn inject_load(&mut self, node: NodeId, load: f64) {
-        self.node_states[node.index()].inject_load(load);
-    }
 }
