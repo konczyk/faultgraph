@@ -12,6 +12,7 @@ use crossterm::event::{Event, KeyCode, KeyEventKind};
 use std::io;
 use std::time::Duration;
 
+mod analysis;
 mod graph;
 mod scenario;
 mod simulation;
