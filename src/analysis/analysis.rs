@@ -74,3 +74,208 @@ pub fn aggregate_groups(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::edge::{Edge, EdgeId};
+    use crate::graph::node::{Node, NodeId};
+    use crate::state::edge_state::EdgeState;
+    use crate::state::node_state::NodeState;
+    use approx::assert_relative_eq;
+
+    #[test]
+    fn test_avg_utilisation_per_group() {
+        let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0);
+        let db1 = Node::new(NodeId(1), "db1".to_string(), 60.0);
+        let link1 = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
+        let api2 = Node::new(NodeId(2), "api2".to_string(), 80.0);
+        let db2 = Node::new(NodeId(3), "db2".to_string(), 10.0);
+        let link2 = Edge::new(EdgeId(1), NodeId(2), NodeId(3), 1.0);
+
+        let graph = Graph::new(vec![api1, db1, api2, db2], vec![link1, link2]);
+
+        let groupset = GroupSet::new(vec![
+            Group::new("group1".to_string(), vec![NodeId(0), NodeId(1)]),
+            Group::new("group2".to_string(), vec![NodeId(2), NodeId(3)]),
+        ]);
+
+        let previous_snapshot = Snapshot::new(
+            5,
+            vec![
+                NodeState::new(20.0, 0.9),
+                NodeState::new(10.0, 0.06),
+                NodeState::new(60.0, 0.2),
+                NodeState::new(40.0, 0.6),
+            ],
+            vec![EdgeState::new(true), EdgeState::new(true)],
+        );
+
+        let current_snapshot = Snapshot::new(
+            6,
+            vec![
+                NodeState::new(10.0, 0.5),
+                NodeState::new(50.0, 0.2),
+                NodeState::new(30.0, 0.05),
+                NodeState::new(90.0, 0.8),
+            ],
+            vec![EdgeState::new(true), EdgeState::new(true)],
+        );
+
+        let summaries = aggregate_groups(&groupset, &current_snapshot, &previous_snapshot, &graph);
+
+        assert_relative_eq!(
+            (10.0 / 100.0 + 50.0 / 60.0) / 2.0,
+            summaries[0].avg_utilization()
+        );
+        assert_relative_eq!(
+            (30.0 / 80.0 + 90.0 / 10.0) / 2.0,
+            summaries[1].avg_utilization()
+        );
+    }
+
+    #[test]
+    fn test_trend_detection() {
+        let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0);
+        let db1 = Node::new(NodeId(1), "db1".to_string(), 60.0);
+        let link1 = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
+        let api2 = Node::new(NodeId(2), "api2".to_string(), 80.0);
+        let db2 = Node::new(NodeId(3), "db2".to_string(), 10.0);
+        let link2 = Edge::new(EdgeId(1), NodeId(2), NodeId(3), 1.0);
+        let api3 = Node::new(NodeId(4), "api3".to_string(), 30.0);
+        let db3 = Node::new(NodeId(5), "db3".to_string(), 70.0);
+        let link3 = Edge::new(EdgeId(2), NodeId(4), NodeId(5), 1.0);
+
+        let graph = Graph::new(
+            vec![api1, db1, api2, db2, api3, db3],
+            vec![link1, link2, link3],
+        );
+
+        let groupset = GroupSet::new(vec![
+            Group::new("group1".to_string(), vec![NodeId(0), NodeId(1)]),
+            Group::new("group2".to_string(), vec![NodeId(2), NodeId(3)]),
+            Group::new("group3".to_string(), vec![NodeId(4), NodeId(5)]),
+        ]);
+
+        let previous_snapshot = Snapshot::new(
+            5,
+            vec![
+                NodeState::new(20.0, 0.9),
+                NodeState::new(10.0, 0.06),
+                NodeState::new(60.0, 0.2),
+                NodeState::new(40.0, 0.6),
+                NodeState::new(10.0, 0.6),
+                NodeState::new(20.0, 0.1),
+            ],
+            vec![
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+            ],
+        );
+
+        let current_snapshot = Snapshot::new(
+            6,
+            vec![
+                NodeState::new(22.0, 0.93),
+                NodeState::new(10.0, 0.07),
+                NodeState::new(66.0, 0.17),
+                NodeState::new(40.0, 0.6),
+                NodeState::new(10.0, 0.6),
+                NodeState::new(16.0, 0.1),
+            ],
+            vec![
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+            ],
+        );
+
+        let summaries = aggregate_groups(&groupset, &current_snapshot, &previous_snapshot, &graph);
+
+        // delta ~ 0.02
+        assert_eq!(GroupTrend::Flat, *summaries[0].trend());
+        // delta > 0.02
+        assert_eq!(GroupTrend::Up, *summaries[1].trend());
+        // delta < -0.02
+        assert_eq!(GroupTrend::Down, *summaries[2].trend());
+    }
+
+    #[test]
+    fn test_risk_classification_at_boundaries() {
+        let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0);
+        let db1 = Node::new(NodeId(1), "db1".to_string(), 60.0);
+        let link1 = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
+
+        let api2 = Node::new(NodeId(2), "api2".to_string(), 200.0);
+        let db2 = Node::new(NodeId(3), "db2".to_string(), 60.0);
+        let link2 = Edge::new(EdgeId(1), NodeId(2), NodeId(3), 2.0);
+
+        let api3 = Node::new(NodeId(4), "api3".to_string(), 200.0);
+        let db3 = Node::new(NodeId(5), "db3".to_string(), 60.0);
+        let link3 = Edge::new(EdgeId(2), NodeId(4), NodeId(5), 2.0);
+
+        let api4 = Node::new(NodeId(6), "api4".to_string(), 200.0);
+        let db4 = Node::new(NodeId(7), "db4".to_string(), 60.0);
+        let link4 = Edge::new(EdgeId(3), NodeId(6), NodeId(7), 2.0);
+
+        let graph = Graph::new(
+            vec![api1, db1, api2, db2, api3, db3, api4, db4],
+            vec![link1, link2, link3, link4],
+        );
+
+        let groupset = GroupSet::new(vec![
+            Group::new("group1".to_string(), vec![NodeId(0), NodeId(1)]),
+            Group::new("group2".to_string(), vec![NodeId(2), NodeId(3)]),
+            Group::new("group3".to_string(), vec![NodeId(4), NodeId(5)]),
+            Group::new("group4".to_string(), vec![NodeId(6), NodeId(7)]),
+        ]);
+
+        let previous_snapshot = Snapshot::new(
+            5,
+            vec![
+                NodeState::new(20.0, 0.9),
+                NodeState::new(10.0, 0.8),
+                NodeState::new(20.0, 0.9),
+                NodeState::new(10.0, 0.8),
+                NodeState::new(20.0, 0.9),
+                NodeState::new(10.0, 0.8),
+                NodeState::new(20.0, 0.9),
+                NodeState::new(10.0, 0.8),
+            ],
+            vec![
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+            ],
+        );
+
+        let current_snapshot = Snapshot::new(
+            6,
+            vec![
+                NodeState::new(20.0, 0.5),
+                NodeState::new(10.0, 0.1),
+                NodeState::new(20.0, 0.5),
+                NodeState::new(10.0, 0.4),
+                NodeState::new(20.0, 0.8),
+                NodeState::new(10.0, 0.7),
+                NodeState::new(20.0, 0.9),
+                NodeState::new(10.0, 0.8),
+            ],
+            vec![
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+            ],
+        );
+
+        let summaries = aggregate_groups(&groupset, &current_snapshot, &previous_snapshot, &graph);
+
+        assert_eq!(GroupRisk::Critical, *summaries[0].risk());
+        assert_eq!(GroupRisk::High, *summaries[1].risk());
+        assert_eq!(GroupRisk::Medium, *summaries[2].risk());
+        assert_eq!(GroupRisk::Low, *summaries[3].risk());
+    }
+}

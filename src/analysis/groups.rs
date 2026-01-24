@@ -33,12 +33,14 @@ impl GroupSet {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum GroupTrend {
     Up,
     Down,
     Flat,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum GroupRisk {
     Low,
     Medium,
@@ -72,5 +74,17 @@ impl GroupSummary {
             worst_health,
             risk,
         }
+    }
+
+    pub fn avg_utilization(&self) -> f64 {
+        self.avg_utilization
+    }
+
+    pub fn trend(&self) -> &GroupTrend {
+        &self.trend
+    }
+
+    pub fn risk(&self) -> &GroupRisk {
+        &self.risk
     }
 }
