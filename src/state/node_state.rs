@@ -30,6 +30,4 @@ impl NodeState {
     pub fn is_healthy(&self) -> bool {
         self.health > 0.0
     }
-
 }
-

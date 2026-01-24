@@ -1,6 +1,6 @@
 #[derive(Clone, Copy)]
 pub struct EdgeState {
-    enabled: bool
+    enabled: bool,
 }
 
 impl EdgeState {

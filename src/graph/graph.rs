@@ -13,13 +13,9 @@ impl Graph {
         edges.iter().for_each(|e| {
             adj[e.from().index()].push(e.id());
         });
-        Self {
-            nodes,
-            edges,
-            adj
-        }
+        Self { nodes, edges, adj }
     }
-    
+
     pub fn nodes(&self) -> &[Node] {
         &self.nodes
     }

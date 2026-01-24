@@ -105,7 +105,11 @@ mod tests {
     fn snapshot(graph: &Graph) -> Snapshot {
         Snapshot::new(
             0,
-            graph.nodes().iter().map(|_| NodeState::new(0.0, 1.0)).collect(),
+            graph
+                .nodes()
+                .iter()
+                .map(|_| NodeState::new(0.0, 1.0))
+                .collect(),
             graph.edges().iter().map(|_| EdgeState::new(true)).collect(),
         )
     }
@@ -173,8 +177,16 @@ mod tests {
         let graph = Graph::new(vec![api, db], vec![link]);
         let initial_snapshot = Snapshot::new(
             0,
-            graph.nodes().iter().map(|_| NodeState::new(0.0, 1.0)).collect(),
-            graph.edges().iter().map(|_| EdgeState::new(false)).collect(),
+            graph
+                .nodes()
+                .iter()
+                .map(|_| NodeState::new(0.0, 1.0))
+                .collect(),
+            graph
+                .edges()
+                .iter()
+                .map(|_| EdgeState::new(false))
+                .collect(),
         );
 
         let mut engine = SimulationEngine::new(
@@ -199,7 +211,12 @@ mod tests {
         let graph = Graph::new(vec![api, db], vec![link]);
         let initial_snapshot = Snapshot::new(
             0,
-            graph.nodes().iter().enumerate().map(|(i, _)| NodeState::new(0.0, if i == 0 { 0.0 } else { 1.0 })).collect(),
+            graph
+                .nodes()
+                .iter()
+                .enumerate()
+                .map(|(i, _)| NodeState::new(0.0, if i == 0 { 0.0 } else { 1.0 }))
+                .collect(),
             graph.edges().iter().map(|_| EdgeState::new(true)).collect(),
         );
 

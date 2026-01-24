@@ -19,7 +19,12 @@ pub struct Edge {
 
 impl Edge {
     pub fn new(id: EdgeId, from: NodeId, to: NodeId, multiplier: f64) -> Self {
-        Self { id, from, to, multiplier }
+        Self {
+            id,
+            from,
+            to,
+            multiplier,
+        }
     }
 
     pub fn id(&self) -> EdgeId {

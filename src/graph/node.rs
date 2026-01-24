@@ -19,10 +19,10 @@ impl Node {
         Self {
             id,
             name: name.into(),
-            capacity
+            capacity,
         }
     }
-    
+
     pub fn name(&self) -> &str {
         &self.name.as_str()
     }

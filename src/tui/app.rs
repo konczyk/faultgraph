@@ -14,7 +14,11 @@ pub struct App {
 
 impl App {
     pub fn new(engine: SimulationEngine) -> Self {
-        Self { engine, running: true, sort_mode: SortMode::Utilization}
+        Self {
+            engine,
+            running: true,
+            sort_mode: SortMode::Utilization,
+        }
     }
 }
 
