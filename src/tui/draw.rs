@@ -3,6 +3,7 @@ use crate::tui::app::App;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::widgets::{Block, BorderType, Borders, Cell, Row, Table};
 use ratatui::Frame;
+use ratatui::style::{Color, Style};
 
 pub fn draw_app(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -52,13 +53,21 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
                 let node = graph.node_by_id(NodeId(*i));
                 let state = &states[*i];
 
+                let util_style = if *utilization < 0.8 {
+                    Style::default().fg(Color::Green)
+                } else if *utilization <= 1.0 {
+                    Style::default().fg(Color::Yellow)
+                } else {
+                    Style::default().fg(Color::Red)
+                };
+
                 Row::new(vec![
                     Cell::from(i.to_string()),
                     Cell::from(node.name()),
                     Cell::from(format!("{:.1}", state.load())),
                     Cell::from(format!("{:.1}", node.capacity())),
                     Cell::from(format!("{:.2}", state.health())),
-                    Cell::from(format!("{:.2}", utilization)),
+                    Cell::from(format!("{:.2}", utilization)).style(util_style),
                 ])
             }),
         [
