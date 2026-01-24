@@ -1,6 +1,8 @@
+use crate::analysis::analysis::aggregate_groups;
 use crate::graph::edge::{Edge, EdgeId};
 use crate::graph::graph::Graph;
 use crate::graph::node::{Node, NodeId};
+use crate::scenario::basic::BasicScenario;
 use crate::scenario::scenario::Scenario;
 use crate::simulation::engine::SimulationEngine;
 use crate::state::edge_state::EdgeState;
@@ -11,7 +13,6 @@ use crate::tui::draw::draw_app;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use std::io;
 use std::time::Duration;
-use crate::scenario::basic::BasicScenario;
 
 mod analysis;
 mod graph;
@@ -24,9 +25,12 @@ fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
     let (graph, groups, initial_snapshot, scenario) = BasicScenario::build();
     let engine = SimulationEngine::new(graph, initial_snapshot, scenario);
+
     let mut app = App::new(engine, groups);
 
     loop {
+        let groups = app.groups();
+        //app.set_aggregations(aggregate_groups(groups, &current_snapshot, &previous_snapshot, app.engine.graph()));
         let _ = terminal.draw(|frame| draw_app(frame, &app));
 
         if crossterm::event::poll(Duration::from_millis(16))? {
@@ -39,7 +43,7 @@ fn main() -> io::Result<()> {
                 Event::Key(key)
                     if key.kind == KeyEventKind::Press && key.code == KeyCode::Char(' ') =>
                 {
-                    app.engine.step()
+                    app.engine.step();
                 }
                 _ => continue,
             }

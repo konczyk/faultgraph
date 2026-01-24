@@ -76,12 +76,24 @@ impl GroupSummary {
         }
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn avg_utilization(&self) -> f64 {
         self.avg_utilization
     }
 
     pub fn trend(&self) -> &GroupTrend {
         &self.trend
+    }
+
+    pub fn node_count(&self) -> usize {
+        self.node_count
+    }
+
+    pub fn worst_health(&self) -> f64 {
+        self.worst_health
     }
 
     pub fn risk(&self) -> &GroupRisk {

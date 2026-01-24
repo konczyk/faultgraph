@@ -3,9 +3,11 @@ use crate::graph::graph::Graph;
 use crate::graph::node::NodeId;
 use crate::scenario::scenario::Scenario;
 use crate::state::snapshot::Snapshot;
+use std::mem;
 
 pub struct SimulationEngine {
     graph: Graph,
+    previous_snapshot: Option<Snapshot>,
     current_snapshot: Snapshot,
     scenario: Box<dyn Scenario>,
 }
@@ -14,6 +16,7 @@ impl SimulationEngine {
     pub fn new(graph: Graph, initial_snapshot: Snapshot, scenario: Box<dyn Scenario>) -> Self {
         Self {
             graph,
+            previous_snapshot: None,
             current_snapshot: initial_snapshot,
             scenario,
         }
@@ -53,15 +56,25 @@ impl SimulationEngine {
             }
         });
 
-        self.current_snapshot = Snapshot::new(
-            self.current_snapshot.turn() + 1,
-            new_node_states,
-            self.current_snapshot.edge_states().clone(),
+        let turn = self.current_snapshot.turn() + 1;
+        let new_edge_states = self.current_snapshot.edge_states().clone();
+
+        let old_snapshot = mem::replace(
+            &mut self.current_snapshot,
+            Snapshot::new(turn, new_node_states, new_edge_states),
         );
+
+        self.previous_snapshot = Some(old_snapshot);
     }
 
     pub fn current_snapshot(&self) -> &Snapshot {
         &self.current_snapshot
+    }
+
+    pub fn previous_snapshot(&self) -> &Snapshot {
+        self.previous_snapshot
+            .as_ref()
+            .unwrap_or(&self.current_snapshot)
     }
 }
 
