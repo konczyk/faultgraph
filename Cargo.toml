@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 ratatui = "0.30"
 crossterm = "0.29"
+
+[dev-dependencies]
+approx = "0.5"
