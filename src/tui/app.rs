@@ -1,4 +1,3 @@
-use crate::analysis::groups::{GroupSet, GroupSummary};
 use crate::simulation::engine::SimulationEngine;
 
 pub enum SortMode {
@@ -11,21 +10,15 @@ pub struct App {
     pub engine: SimulationEngine,
     pub running: bool,
     pub sort_mode: SortMode,
-    groups: GroupSet,
 }
 
 impl App {
-    pub fn new(engine: SimulationEngine, groups: GroupSet) -> Self {
+    pub fn new(engine: SimulationEngine) -> Self {
         Self {
             engine,
             running: true,
             sort_mode: SortMode::Utilization,
-            groups,
         }
-    }
-
-    pub fn groups(&self) -> &GroupSet {
-        &self.groups
     }
 }
 

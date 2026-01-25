@@ -1,24 +1,60 @@
+use crate::analysis::groups::GroupSet;
 use crate::graph::edge::EdgeId;
 use crate::graph::graph::Graph;
 use crate::graph::node::NodeId;
 use crate::scenario::scenario::Scenario;
+use crate::simulation::modifiers::Throttle;
 use crate::state::snapshot::Snapshot;
 use std::mem;
 
 pub struct SimulationEngine {
     graph: Graph,
+    groups: GroupSet,
     previous_snapshot: Option<Snapshot>,
     current_snapshot: Snapshot,
     scenario: Box<dyn Scenario>,
+    remaining_ops: u8,
+    throttles: Vec<Throttle>,
+    node_to_group: Vec<usize>,
 }
 
 impl SimulationEngine {
-    pub fn new(graph: Graph, initial_snapshot: Snapshot, scenario: Box<dyn Scenario>) -> Self {
+    pub fn new(
+        graph: Graph,
+        groups: GroupSet,
+        initial_snapshot: Snapshot,
+        scenario: Box<dyn Scenario>,
+    ) -> Self {
+        let remaining_ops = scenario.ops_per_turn();
+        let groups_cnt = groups.groups().len();
+        let node_to_group = graph
+            .nodes()
+            .iter()
+            .enumerate()
+            .map(|(n_id, _)| {
+                groups
+                    .groups()
+                    .iter()
+                    .enumerate()
+                    .find_map(|(g_id, group)| {
+                        group
+                            .nodes()
+                            .iter()
+                            .find(|n| n.index() == n_id)
+                            .map(|_| g_id)
+                    })
+                    .unwrap()
+            })
+            .collect();
         Self {
             graph,
+            groups,
             previous_snapshot: None,
             current_snapshot: initial_snapshot,
             scenario,
+            remaining_ops,
+            throttles: vec![Throttle::new(); groups_cnt],
+            node_to_group,
         }
     }
 
@@ -26,8 +62,20 @@ impl SimulationEngine {
         &self.graph
     }
 
+    pub fn groups(&self) -> &GroupSet {
+        &self.groups
+    }
+
     pub fn scenario(&self) -> &Box<dyn Scenario> {
         &self.scenario
+    }
+
+    pub fn remaining_ops(&self) -> u8 {
+        self.remaining_ops
+    }
+
+    pub fn group_by_node_id(&self, node_id: usize) -> usize {
+        self.node_to_group[node_id]
     }
 
     pub fn step(&mut self) {
@@ -42,7 +90,10 @@ impl SimulationEngine {
             .map(|(i, _)| (i, self.graph.edge_by_id(EdgeId(i))))
             .filter(|(_, e)| states[e.from().index()].is_healthy())
             .for_each(|(_, e)| {
-                prop[e.to().index()] += states[e.from().index()].load() * e.multiplier();
+                let f_id = e.from().index();
+                let t_id = e.to().index();
+                let throttle = self.throttles[self.node_to_group[f_id]].factor();
+                prop[t_id] += states[f_id].load() * e.multiplier() * throttle;
             });
 
         self.scenario.entry_nodes().iter().for_each(|id| {
@@ -69,6 +120,9 @@ impl SimulationEngine {
         );
 
         self.previous_snapshot = Some(old_snapshot);
+
+        self.remaining_ops = self.scenario.ops_per_turn();
+        self.throttles.iter_mut().for_each(|t| t.deactivate());
     }
 
     pub fn current_snapshot(&self) -> &Snapshot {
@@ -80,11 +134,26 @@ impl SimulationEngine {
             .as_ref()
             .unwrap_or(&self.current_snapshot)
     }
+
+    pub fn try_throttle_group(&mut self, group_id: usize) -> bool {
+        if self.remaining_ops == 0 {
+            false
+        } else {
+            self.remaining_ops -= 1;
+            self.throttles[group_id].apply(0.5);
+            true
+        }
+    }
+
+    pub fn throttle(&self, group_id: usize) -> &Throttle {
+        &self.throttles[group_id]
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analysis::groups::Group;
     use crate::graph::edge::Edge;
     use crate::graph::node::Node;
     use crate::state::edge_state::EdgeState;
@@ -117,6 +186,10 @@ mod tests {
         fn entry_nodes(&self) -> &[NodeId] {
             &self.entry
         }
+
+        fn ops_per_turn(&self) -> u8 {
+            1
+        }
     }
 
     fn snapshot(graph: &Graph) -> Snapshot {
@@ -139,9 +212,14 @@ mod tests {
 
         let graph = Graph::new(vec![api, db], vec![link]);
         let initial_snapshot = snapshot(&graph);
+        let groups = GroupSet::new(vec![Group::new(
+            "group1".to_string(),
+            vec![NodeId(0), NodeId(1)],
+        )]);
 
         let mut engine = SimulationEngine::new(
             graph,
+            groups,
             initial_snapshot,
             Box::new(TestScenario::new(vec![NodeId(0)])),
         );
@@ -171,9 +249,14 @@ mod tests {
 
         let graph = Graph::new(vec![api, db], vec![link]);
         let initial_snapshot = snapshot(&graph);
+        let groups = GroupSet::new(vec![Group::new(
+            "group1".to_string(),
+            vec![NodeId(0), NodeId(1)],
+        )]);
 
         let mut engine = SimulationEngine::new(
             graph,
+            groups,
             initial_snapshot,
             Box::new(TestScenario::new(vec![NodeId(0)])),
         );
@@ -205,9 +288,14 @@ mod tests {
                 .map(|_| EdgeState::new(false))
                 .collect(),
         );
+        let groups = GroupSet::new(vec![Group::new(
+            "group1".to_string(),
+            vec![NodeId(0), NodeId(1)],
+        )]);
 
         let mut engine = SimulationEngine::new(
             graph,
+            groups,
             initial_snapshot,
             Box::new(TestScenario::new(vec![NodeId(0)])),
         );
@@ -236,9 +324,14 @@ mod tests {
                 .collect(),
             graph.edges().iter().map(|_| EdgeState::new(true)).collect(),
         );
+        let groups = GroupSet::new(vec![Group::new(
+            "group1".to_string(),
+            vec![NodeId(0), NodeId(1)],
+        )]);
 
         let mut engine = SimulationEngine::new(
             graph,
+            groups,
             initial_snapshot,
             Box::new(TestScenario::new(vec![NodeId(0)])),
         );

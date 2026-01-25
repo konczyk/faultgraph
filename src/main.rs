@@ -1,13 +1,5 @@
-use crate::analysis::analysis::aggregate_groups;
-use crate::graph::edge::{Edge, EdgeId};
-use crate::graph::graph::Graph;
-use crate::graph::node::{Node, NodeId};
 use crate::scenario::basic::BasicScenario;
-use crate::scenario::scenario::Scenario;
 use crate::simulation::engine::SimulationEngine;
-use crate::state::edge_state::EdgeState;
-use crate::state::node_state::NodeState;
-use crate::state::snapshot::Snapshot;
 use crate::tui::app::App;
 use crate::tui::draw::draw_app;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
@@ -24,13 +16,11 @@ mod tui;
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
     let (graph, groups, initial_snapshot, scenario) = BasicScenario::build();
-    let engine = SimulationEngine::new(graph, initial_snapshot, scenario);
+    let engine = SimulationEngine::new(graph, groups, initial_snapshot, scenario);
 
-    let mut app = App::new(engine, groups);
+    let mut app = App::new(engine);
 
     loop {
-        let groups = app.groups();
-        //app.set_aggregations(aggregate_groups(groups, &current_snapshot, &previous_snapshot, app.engine.graph()));
         let _ = terminal.draw(|frame| draw_app(frame, &app));
 
         if crossterm::event::poll(Duration::from_millis(16))? {
@@ -44,6 +34,13 @@ fn main() -> io::Result<()> {
                     if key.kind == KeyEventKind::Press && key.code == KeyCode::Char(' ') =>
                 {
                     app.engine.step();
+                }
+                Event::Key(key)
+                    if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('t') =>
+                {
+                    if app.engine.try_throttle_group(0) {
+                        let _ = terminal.draw(|frame| draw_app(frame, &app));
+                    }
                 }
                 _ => continue,
             }

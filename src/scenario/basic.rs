@@ -81,4 +81,8 @@ impl Scenario for BasicScenario {
     fn entry_nodes(&self) -> &[NodeId] {
         &self.entry
     }
+
+    fn ops_per_turn(&self) -> u8 {
+        1
+    }
 }

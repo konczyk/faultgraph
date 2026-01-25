@@ -4,7 +4,7 @@ use crate::graph::node::NodeId;
 use crate::tui::app::App;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
-use ratatui::style::Color::White;
+use ratatui::style::Color::{LightGreen, White};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Cell, Padding, Paragraph, Row, Table};
@@ -52,6 +52,9 @@ fn build_turn(app: &'_ App) -> Paragraph<'_> {
     Paragraph::new(Line::from(vec![
         Span::from(" Turn "),
         Span::from(format!("{}", app.engine.current_snapshot().turn())).bold(),
+        Span::from(" | "),
+        Span::from(" Ops "),
+        Span::from(format!("{}", app.engine.remaining_ops())).bold(),
     ]))
     .centered()
 }
@@ -117,6 +120,8 @@ fn build_status(_app: &'_ App) -> Paragraph<'_> {
         Span::from(" Quit ").bold(),
         Span::from(" [Space]"),
         Span::from(" Step ").bold(),
+        Span::from(" [T]"),
+        Span::from(" Throttle ").bold(),
     ]))
 }
 
@@ -130,9 +135,24 @@ fn util_style(utilization: f64) -> Style {
     }
 }
 
+fn mods(app: &'_ App, group_id: usize) -> Line<'_> {
+    let mut mods = Line::default();
+    let throttle = app.engine.throttle(group_id);
+    if throttle.is_active() {
+        let span;
+        if throttle.is_just_applied() {
+            span = Span::from(" T ").bg(LightGreen).bold();
+        } else {
+            span = Span::from(" T ").dim();
+        }
+        mods.spans.push(span);
+    }
+    mods
+}
+
 fn build_group_table(app: &'_ App) -> Table<'_> {
     let mut aggregations = aggregate_groups(
-        app.groups(),
+        app.engine.groups(),
         app.engine.current_snapshot(),
         app.engine.previous_snapshot(),
         app.engine.graph(),
@@ -141,7 +161,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
     aggregations.sort_by(|a, b| a.worst_health().partial_cmp(&b.worst_health()).unwrap());
 
     Table::new(
-        aggregations.iter().map(|summary| {
+        aggregations.iter().enumerate().map(|(g_id, summary)| {
             let trend = match summary.trend() {
                 GroupTrend::Up => "  ↗",
                 GroupTrend::Down => "  ↘",
@@ -162,14 +182,16 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
                 Cell::from(format!("{trend}")).style(Style::default().bold()),
                 Cell::from(format!("{:>5}", summary.node_count())),
                 Cell::from(format!("{:?}", summary.risk())).style(risk_style),
+                Cell::from(mods(app, g_id)),
             ])
         }),
         [
-            Constraint::Length(25),
+            Constraint::Length(15),
             Constraint::Length(8),
             Constraint::Length(8),
             Constraint::Length(8),
             Constraint::Length(8),
+            Constraint::Fill(1),
         ],
     )
     .header(
@@ -179,6 +201,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
             Cell::from("Trend"),
             Cell::from("Nodes"),
             Cell::from("Risk"),
+            Cell::from("Mods"),
         ])
         .style(Style::default().bg(Color::DarkGray).fg(White)),
     )
@@ -222,6 +245,7 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
                 Cell::from(format!("{:>8.1}", state.load())),
                 Cell::from(format!("{:>6.1}", node.capacity())),
                 Cell::from(format!("{:>6.1}", state.health() * 100.0)),
+                Cell::from(mods(app, app.engine.group_by_node_id(*i))),
             ])
         }),
         [
@@ -229,6 +253,7 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
             Constraint::Length(20),
             Constraint::Length(8),
             Constraint::Length(9),
+            Constraint::Length(8),
             Constraint::Length(8),
             Constraint::Length(8),
         ],
@@ -241,6 +266,7 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
             Cell::from(" Load rps"),
             Cell::from("  Cap"),
             Cell::from("Health %"),
+            Cell::from("Mods"),
         ])
         .style(Style::default().bg(Color::DarkGray).fg(White)),
     )
