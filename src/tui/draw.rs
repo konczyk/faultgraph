@@ -1,5 +1,5 @@
 use crate::analysis::analysis::aggregate_groups;
-use crate::analysis::groups::{GroupRisk, GroupTrend};
+use crate::analysis::groups::{GroupRisk, GroupSummary, GroupTrend};
 use crate::graph::node::NodeId;
 use crate::tui::app::App;
 use ratatui::Frame;
@@ -156,12 +156,15 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
         app.engine.current_snapshot(),
         app.engine.previous_snapshot(),
         app.engine.graph(),
-    );
+    )
+    .into_iter()
+    .enumerate()
+    .collect::<Vec<(usize, GroupSummary)>>();
 
-    aggregations.sort_by(|a, b| a.worst_health().partial_cmp(&b.worst_health()).unwrap());
+    aggregations.sort_by(|a, b| a.1.worst_health().partial_cmp(&b.1.worst_health()).unwrap());
 
     Table::new(
-        aggregations.iter().enumerate().map(|(g_id, summary)| {
+        aggregations.iter().map(|(g_id, summary)| {
             let trend = match summary.trend() {
                 GroupTrend::Up => "  ↗",
                 GroupTrend::Down => "  ↘",
@@ -182,7 +185,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
                 Cell::from(format!("{trend}")).style(Style::default().bold()),
                 Cell::from(format!("{:>5}", summary.node_count())),
                 Cell::from(format!("{:?}", summary.risk())).style(risk_style),
-                Cell::from(mods(app, g_id)),
+                Cell::from(mods(app, *g_id)),
             ])
         }),
         [
