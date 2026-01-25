@@ -26,6 +26,10 @@ impl SimulationEngine {
         &self.graph
     }
 
+    pub fn scenario(&self) -> &Box<dyn Scenario> {
+        &self.scenario
+    }
+
     pub fn step(&mut self) {
         let states = self.current_snapshot.node_states();
         let mut prop = vec![0.0; self.graph.node_count()];
