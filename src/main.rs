@@ -2,6 +2,7 @@ use crate::scenario::basic::BasicScenario;
 use crate::simulation::engine::SimulationEngine;
 use crate::tui::app::App;
 use crate::tui::draw::draw_app;
+use crossterm::event::KeyCode::{Down, Up};
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use std::io;
 use std::time::Duration;
@@ -33,14 +34,19 @@ fn main() -> io::Result<()> {
                 Event::Key(key)
                     if key.kind == KeyEventKind::Press && key.code == KeyCode::Char(' ') =>
                 {
+                    app.refresh_groups();
                     app.engine.step();
                 }
                 Event::Key(key)
                     if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('t') =>
                 {
-                    if app.engine.try_throttle_group(0) {
-                        let _ = terminal.draw(|frame| draw_app(frame, &app));
-                    }
+                    app.engine.try_throttle_group(app.selected_group_id());
+                }
+                Event::Key(key) if key.kind == KeyEventKind::Press && key.code == Up => {
+                    app.select_previous_group();
+                }
+                Event::Key(key) if key.kind == KeyEventKind::Press && key.code == Down => {
+                    app.select_next_group();
                 }
                 _ => continue,
             }

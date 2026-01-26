@@ -1,13 +1,12 @@
-use crate::analysis::analysis::aggregate_groups;
-use crate::analysis::groups::{GroupHealth, GroupSummary, GroupTrend};
+use crate::analysis::groups::{GroupHealth, GroupTrend};
 use crate::graph::node::NodeId;
 use crate::tui::app::App;
-use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
-use ratatui::style::Color::{LightGreen, White};
+use ratatui::style::Color::{Black, Gray, LightGreen, White};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Cell, Padding, Paragraph, Row, Table};
+use ratatui::Frame;
 
 pub fn draw_app(frame: &mut Frame, app: &App) {
     let main = Layout::vertical([
@@ -165,20 +164,8 @@ fn mods(app: &'_ App, group_id: usize) -> Line<'_> {
 }
 
 fn build_group_table(app: &'_ App) -> Table<'_> {
-    let mut aggregations = aggregate_groups(
-        app.engine.groups(),
-        app.engine.current_snapshot(),
-        app.engine.previous_snapshot(),
-        app.engine.graph(),
-    )
-    .into_iter()
-    .enumerate()
-    .collect::<Vec<(usize, GroupSummary)>>();
-
-    aggregations.sort_by(|a, b| a.1.raw_health().partial_cmp(&b.1.raw_health()).unwrap());
-
     Table::new(
-        aggregations.iter().map(|(g_id, summary)| {
+        app.aggregations.iter().map(|(g_id, summary)| {
             let util_trend = match summary.utilization_trend() {
                 GroupTrend::Up => " ↗",
                 GroupTrend::Down => " ↘",
@@ -198,6 +185,12 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
                 GroupHealth::Failed => Style::default().red().bold(),
             };
 
+            let row_style = if *g_id == app.selected_group_id() {
+                Style::default().bg(Gray).fg(Black)
+            } else {
+                Style::default()
+            };
+
             Row::new(vec![
                 Cell::from(summary.name().to_owned()),
                 Cell::from(Line::from(vec![
@@ -214,6 +207,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
                 ])),
                 Cell::from(mods(app, *g_id)),
             ])
+            .style(row_style)
         }),
         [
             Constraint::Length(15),
@@ -229,7 +223,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
             Cell::from("   Util %"),
             Cell::from(" Nodes"),
             Cell::from("    Status"),
-            Cell::from("Mods"),
+            Cell::from(" Mods"),
         ])
         .style(Style::default().bg(Color::DarkGray).fg(White)),
     )
@@ -294,7 +288,7 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
             Cell::from(" Load rps"),
             Cell::from("  Cap"),
             Cell::from("Health %"),
-            Cell::from("Mods"),
+            Cell::from(" Mods"),
         ])
         .style(Style::default().bg(Color::DarkGray).fg(White)),
     )
