@@ -1,5 +1,5 @@
 use crate::analysis::analysis::aggregate_groups;
-use crate::analysis::groups::{GroupRisk, GroupSummary, GroupTrend};
+use crate::analysis::groups::{GroupHealth, GroupSummary, GroupTrend};
 use crate::graph::node::NodeId;
 use crate::tui::app::App;
 use ratatui::Frame;
@@ -161,21 +161,27 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
     .enumerate()
     .collect::<Vec<(usize, GroupSummary)>>();
 
-    aggregations.sort_by(|a, b| a.1.worst_health().partial_cmp(&b.1.worst_health()).unwrap());
+    aggregations.sort_by(|a, b| a.1.raw_health().partial_cmp(&b.1.raw_health()).unwrap());
 
     Table::new(
         aggregations.iter().map(|(g_id, summary)| {
-            let trend = match summary.trend() {
+            let util_trend = match summary.utilization_trend() {
                 GroupTrend::Up => " ↗",
                 GroupTrend::Down => " ↘",
                 GroupTrend::Flat => " →",
             };
 
-            let risk_style = match summary.risk() {
-                GroupRisk::Low => Style::default().add_modifier(Modifier::DIM),
-                GroupRisk::Medium => Style::default().yellow(),
-                GroupRisk::High => Style::default().light_red(),
-                GroupRisk::Critical => Style::default().red().bold(),
+            let health_trend = match summary.health_trend() {
+                GroupTrend::Up => " [+]",
+                GroupTrend::Down => " [-]",
+                GroupTrend::Flat => " [=]",
+            };
+
+            let health_style = match summary.health() {
+                GroupHealth::Ok => Style::default().green(),
+                GroupHealth::Degraded => Style::default().yellow(),
+                GroupHealth::Critical => Style::default().light_red(),
+                GroupHealth::Failed => Style::default().red().bold(),
             };
 
             Row::new(vec![
@@ -185,10 +191,13 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
                         format!("{:>7.1}", summary.avg_utilization() * 100.0),
                         util_style(summary.avg_utilization()),
                     ),
-                    Span::from(trend),
+                    Span::from(util_trend),
                 ])),
                 Cell::from(format!("{:>5}", summary.node_count())),
-                Cell::from(format!("{:?}", summary.risk())).style(risk_style),
+                Cell::from(Line::from(vec![
+                    Span::styled(format!("{:>9}", summary.health()), health_style),
+                    Span::from(health_trend),
+                ])),
                 Cell::from(mods(app, *g_id)),
             ])
         }),
@@ -196,7 +205,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
             Constraint::Length(15),
             Constraint::Length(10),
             Constraint::Length(8),
-            Constraint::Length(8),
+            Constraint::Length(15),
             Constraint::Fill(1),
         ],
     )
@@ -205,7 +214,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
             Cell::from("Group"),
             Cell::from("   Util %"),
             Cell::from(" Nodes"),
-            Cell::from("Risk"),
+            Cell::from("    Status"),
             Cell::from("Mods"),
         ])
         .style(Style::default().bg(Color::DarkGray).fg(White)),

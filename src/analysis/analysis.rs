@@ -1,4 +1,4 @@
-use crate::analysis::groups::{Group, GroupRisk, GroupSet, GroupSummary, GroupTrend};
+use crate::analysis::groups::{Group, GroupHealth, GroupSet, GroupSummary, GroupTrend};
 use crate::graph::graph::Graph;
 use crate::state::snapshot::Snapshot;
 
@@ -19,16 +19,19 @@ fn calc_util(snapshot: &Snapshot, group: &Group, graph: &Graph) -> f64 {
     if cnt > 0 { agg_util / cnt as f64 } else { 0.0 }
 }
 
-fn calc_worst_health(snapshot: &Snapshot, group: &Group) -> f64 {
+fn calc_health(snapshot: &Snapshot, group: &Group) -> f64 {
     let states = snapshot.node_states();
-    group
+    let h = group
         .nodes()
         .iter()
         .map(|id| states[id.index()])
         .map(|s| s.health())
-        .filter(|h| !h.is_nan())
-        .reduce(f64::min)
-        .unwrap_or(0.0)
+        .collect::<Vec<f64>>();
+    if h.len() == 0 {
+        0.0
+    } else {
+        h.iter().sum::<f64>() / h.iter().count() as f64
+    }
 }
 
 pub fn aggregate_groups(
@@ -46,7 +49,7 @@ pub fn aggregate_groups(
             let curr_avg_util = calc_util(&current_snapshot, &g, &graph);
             let util_diff = curr_avg_util - prev_avg_util;
 
-            let trend = if util_diff > epsilon {
+            let avg_util_trend = if util_diff > epsilon {
                 GroupTrend::Up
             } else if util_diff < -epsilon {
                 GroupTrend::Down
@@ -54,22 +57,33 @@ pub fn aggregate_groups(
                 GroupTrend::Flat
             };
 
-            let worst_health = calc_worst_health(&current_snapshot, &g);
+            let prev_health = calc_health(&previous_snapshot, &g);
+            let curr_health = calc_health(&current_snapshot, &g);
+            let health_diff = curr_health - prev_health;
 
-            let risk = match worst_health {
-                n if n > 0.7 => GroupRisk::Low,
-                n if n <= 0.7 && n > 0.4 => GroupRisk::Medium,
-                n if n <= 0.4 && n > 0.1 => GroupRisk::High,
-                _ => GroupRisk::Critical,
+            let health_trend = if health_diff > epsilon {
+                GroupTrend::Up
+            } else if health_diff < -epsilon {
+                GroupTrend::Down
+            } else {
+                GroupTrend::Flat
+            };
+
+            let health = match curr_health {
+                n if n > 0.7 => GroupHealth::Ok,
+                n if n > 0.2 => GroupHealth::Degraded,
+                n if n > 0.0 => GroupHealth::Critical,
+                _ => GroupHealth::Failed,
             };
 
             GroupSummary::new(
                 g.name().to_string(),
                 curr_avg_util,
-                trend,
+                avg_util_trend,
                 g.nodes().len(),
-                worst_health,
-                risk,
+                curr_health,
+                health,
+                health_trend,
             )
         })
         .collect()
@@ -194,11 +208,11 @@ mod tests {
         let summaries = aggregate_groups(&groupset, &current_snapshot, &previous_snapshot, &graph);
 
         // delta ~ 0.02
-        assert_eq!(GroupTrend::Flat, *summaries[0].trend());
+        assert_eq!(GroupTrend::Flat, *summaries[0].utilization_trend());
         // delta > 0.02
-        assert_eq!(GroupTrend::Up, *summaries[1].trend());
+        assert_eq!(GroupTrend::Up, *summaries[1].utilization_trend());
         // delta < -0.02
-        assert_eq!(GroupTrend::Down, *summaries[2].trend());
+        assert_eq!(GroupTrend::Down, *summaries[2].utilization_trend());
     }
 
     #[test]
@@ -236,8 +250,8 @@ mod tests {
             vec![
                 NodeState::new(20.0, 0.9),
                 NodeState::new(10.0, 0.8),
-                NodeState::new(20.0, 0.9),
-                NodeState::new(10.0, 0.8),
+                NodeState::new(20.0, 0.1),
+                NodeState::new(10.0, 0.1),
                 NodeState::new(20.0, 0.9),
                 NodeState::new(10.0, 0.8),
                 NodeState::new(20.0, 0.9),
@@ -254,14 +268,14 @@ mod tests {
         let current_snapshot = Snapshot::new(
             6,
             vec![
-                NodeState::new(20.0, 0.5),
-                NodeState::new(10.0, 0.1),
-                NodeState::new(20.0, 0.5),
-                NodeState::new(10.0, 0.4),
-                NodeState::new(20.0, 0.8),
-                NodeState::new(10.0, 0.7),
                 NodeState::new(20.0, 0.9),
                 NodeState::new(10.0, 0.8),
+                NodeState::new(20.0, 0.3),
+                NodeState::new(10.0, 0.2),
+                NodeState::new(20.0, 0.1),
+                NodeState::new(10.0, 0.05),
+                NodeState::new(20.0, 0.0),
+                NodeState::new(10.0, 0.0),
             ],
             vec![
                 EdgeState::new(true),
@@ -273,9 +287,17 @@ mod tests {
 
         let summaries = aggregate_groups(&groupset, &current_snapshot, &previous_snapshot, &graph);
 
-        assert_eq!(GroupRisk::Critical, *summaries[0].risk());
-        assert_eq!(GroupRisk::High, *summaries[1].risk());
-        assert_eq!(GroupRisk::Medium, *summaries[2].risk());
-        assert_eq!(GroupRisk::Low, *summaries[3].risk());
+        // 0.85
+        assert_eq!(GroupHealth::Ok, *summaries[0].health());
+        assert_eq!(GroupTrend::Flat, *summaries[0].health_trend());
+        // 0.25
+        assert_eq!(GroupHealth::Degraded, *summaries[1].health());
+        assert_eq!(GroupTrend::Up, *summaries[1].health_trend());
+        // 0.2
+        assert_eq!(GroupHealth::Critical, *summaries[2].health());
+        assert_eq!(GroupTrend::Down, *summaries[2].health_trend());
+        // 0.0
+        assert_eq!(GroupHealth::Failed, *summaries[3].health());
+        assert_eq!(GroupTrend::Down, *summaries[3].health_trend());
     }
 }

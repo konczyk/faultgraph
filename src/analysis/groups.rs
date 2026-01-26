@@ -1,4 +1,5 @@
 use crate::graph::node::NodeId;
+use std::fmt::{Display, Formatter};
 
 pub struct Group {
     name: String,
@@ -41,38 +42,53 @@ pub enum GroupTrend {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum GroupRisk {
-    Low,
-    Medium,
-    High,
+pub enum GroupHealth {
+    Ok,
+    Degraded,
     Critical,
+    Failed,
+}
+
+impl Display for GroupHealth {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            GroupHealth::Ok => "Ok",
+            GroupHealth::Degraded => "Degraded",
+            GroupHealth::Critical => "Critical",
+            GroupHealth::Failed => "Failed",
+        };
+        f.pad(s)
+    }
 }
 
 pub struct GroupSummary {
     name: String,
     avg_utilization: f64,
-    trend: GroupTrend,
+    utilization_trend: GroupTrend,
     node_count: usize,
-    worst_health: f64,
-    risk: GroupRisk,
+    raw_health: f64,
+    health: GroupHealth,
+    health_trend: GroupTrend,
 }
 
 impl GroupSummary {
     pub fn new(
         name: String,
         avg_utilization: f64,
-        trend: GroupTrend,
+        utilization_trend: GroupTrend,
         node_count: usize,
-        worst_health: f64,
-        risk: GroupRisk,
+        raw_health: f64,
+        health: GroupHealth,
+        health_trend: GroupTrend,
     ) -> Self {
         Self {
             name,
             avg_utilization,
-            trend,
+            utilization_trend,
             node_count,
-            worst_health,
-            risk,
+            raw_health,
+            health,
+            health_trend,
         }
     }
 
@@ -84,19 +100,23 @@ impl GroupSummary {
         self.avg_utilization
     }
 
-    pub fn trend(&self) -> &GroupTrend {
-        &self.trend
+    pub fn utilization_trend(&self) -> &GroupTrend {
+        &self.utilization_trend
     }
 
     pub fn node_count(&self) -> usize {
         self.node_count
     }
 
-    pub fn worst_health(&self) -> f64 {
-        self.worst_health
+    pub fn raw_health(&self) -> f64 {
+        self.raw_health
     }
 
-    pub fn risk(&self) -> &GroupRisk {
-        &self.risk
+    pub fn health(&self) -> &GroupHealth {
+        &self.health
+    }
+
+    pub fn health_trend(&self) -> &GroupTrend {
+        &self.health_trend
     }
 }
