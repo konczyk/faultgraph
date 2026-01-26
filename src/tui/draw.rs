@@ -166,9 +166,9 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
     Table::new(
         aggregations.iter().map(|(g_id, summary)| {
             let trend = match summary.trend() {
-                GroupTrend::Up => "  ↗",
-                GroupTrend::Down => "  ↘",
-                GroupTrend::Flat => "  →",
+                GroupTrend::Up => " ↗",
+                GroupTrend::Down => " ↘",
+                GroupTrend::Flat => " →",
             };
 
             let risk_style = match summary.risk() {
@@ -180,9 +180,13 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
 
             Row::new(vec![
                 Cell::from(summary.name().to_owned()),
-                Cell::from(format!("{:>7.1}", summary.avg_utilization() * 100.0))
-                    .style(util_style(summary.avg_utilization())),
-                Cell::from(format!("{trend}")).style(Style::default().bold()),
+                Cell::from(Line::from(vec![
+                    Span::styled(
+                        format!("{:>7.1}", summary.avg_utilization() * 100.0),
+                        util_style(summary.avg_utilization()),
+                    ),
+                    Span::from(trend),
+                ])),
                 Cell::from(format!("{:>5}", summary.node_count())),
                 Cell::from(format!("{:?}", summary.risk())).style(risk_style),
                 Cell::from(mods(app, *g_id)),
@@ -190,8 +194,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
         }),
         [
             Constraint::Length(15),
-            Constraint::Length(8),
-            Constraint::Length(8),
+            Constraint::Length(10),
             Constraint::Length(8),
             Constraint::Length(8),
             Constraint::Fill(1),
@@ -200,9 +203,8 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
     .header(
         Row::new([
             Cell::from("Group"),
-            Cell::from("  Util %"),
-            Cell::from("Trend"),
-            Cell::from("Nodes"),
+            Cell::from("   Util %"),
+            Cell::from(" Nodes"),
             Cell::from("Risk"),
             Cell::from("Mods"),
         ])
