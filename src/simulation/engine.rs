@@ -122,7 +122,7 @@ impl SimulationEngine {
         self.previous_snapshot = Some(old_snapshot);
 
         self.remaining_ops = self.scenario.ops_per_turn();
-        self.throttles.iter_mut().for_each(|t| t.deactivate());
+        self.throttles.iter_mut().for_each(|t| t.tick());
     }
 
     pub fn current_snapshot(&self) -> &Snapshot {
@@ -139,9 +139,12 @@ impl SimulationEngine {
         if self.remaining_ops == 0 {
             false
         } else {
-            self.remaining_ops -= 1;
-            self.throttles[group_id].apply(0.5);
-            true
+            if self.throttles[group_id].apply(0.5) {
+                self.remaining_ops -= 1;
+                true
+            } else {
+                false
+            }
         }
     }
 

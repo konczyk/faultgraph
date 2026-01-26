@@ -5,7 +5,7 @@ use crate::tui::app::App;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::Color::{LightGreen, White};
-use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Cell, Padding, Paragraph, Row, Table};
 
@@ -135,15 +135,29 @@ fn util_style(utilization: f64) -> Style {
     }
 }
 
+fn dots(turns: u8) -> String {
+    match turns {
+        4 => "⢸",
+        3 => "⢰",
+        2 => "⢠",
+        1 => "⢀",
+        _ => "",
+    }
+    .to_string()
+}
+
 fn mods(app: &'_ App, group_id: usize) -> Line<'_> {
     let mut mods = Line::default();
     let throttle = app.engine.throttle(group_id);
     if throttle.is_active() {
+        let turns = dots(throttle.remaining_turns());
         let span;
         if throttle.is_just_applied() {
-            span = Span::from(format!(" Tx{} ", throttle.factor())).bg(LightGreen).bold();
+            span = Span::from(format!(" Tx{}{} ", throttle.factor(), turns))
+                .bg(LightGreen)
+                .bold();
         } else {
-            span = Span::from(format!(" Tx{} ", throttle.factor())).dim();
+            span = Span::from(format!(" Tx{}{} ", throttle.factor(), turns)).dim();
         }
         mods.spans.push(span);
     }
