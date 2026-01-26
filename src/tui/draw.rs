@@ -141,9 +141,9 @@ fn mods(app: &'_ App, group_id: usize) -> Line<'_> {
     if throttle.is_active() {
         let span;
         if throttle.is_just_applied() {
-            span = Span::from(" T ").bg(LightGreen).bold();
+            span = Span::from(format!(" Tx{} ", throttle.factor())).bg(LightGreen).bold();
         } else {
-            span = Span::from(" T ").dim();
+            span = Span::from(format!(" Tx{} ", throttle.factor())).dim();
         }
         mods.spans.push(span);
     }
@@ -172,9 +172,9 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
             };
 
             let health_trend = match summary.health_trend() {
-                GroupTrend::Up => " [+]",
-                GroupTrend::Down => " [-]",
-                GroupTrend::Flat => " [=]",
+                GroupTrend::Up => " ↗",
+                GroupTrend::Down => " ↘",
+                GroupTrend::Flat => " →",
             };
 
             let health_style = match summary.health() {
