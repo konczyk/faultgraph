@@ -17,19 +17,19 @@ pub struct BasicScenario {
 impl BasicScenario {
     pub fn build() -> (Graph, GroupSet, Snapshot, Box<dyn Scenario>) {
         let nodes = vec![
-            Node::new(NodeId(0), "api-gateway".into(), 120.0),
-            Node::new(NodeId(1), "auth-service".into(), 80.0),
-            Node::new(NodeId(2), "orders-service".into(), 90.0),
-            Node::new(NodeId(3), "payments-service".into(), 70.0),
-            Node::new(NodeId(4), "redis-cache".into(), 60.0),
-            Node::new(NodeId(5), "postgres-primary".into(), 100.0),
-            Node::new(NodeId(6), "postgres-replica".into(), 100.0),
+            Node::new(NodeId(0), "api-gateway".into(), 120.0, 1.0),
+            Node::new(NodeId(1), "auth-service".into(), 80.0, 1.0),
+            Node::new(NodeId(2), "orders-service".into(), 90.0, 1.1),
+            Node::new(NodeId(3), "payments-service".into(), 70.0, 1.2),
+            Node::new(NodeId(4), "redis-cache".into(), 60.0, 1.4),
+            Node::new(NodeId(5), "postgres-primary".into(), 100.0, 0.7),
+            Node::new(NodeId(6), "postgres-replica".into(), 100.0, 0.5),
         ];
 
         let edges = vec![
             Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0),
             Edge::new(EdgeId(1), NodeId(0), NodeId(2), 1.0),
-            Edge::new(EdgeId(2), NodeId(2), NodeId(3), 1.1),
+            Edge::new(EdgeId(2), NodeId(2), NodeId(3), 2.0),
             Edge::new(EdgeId(3), NodeId(1), NodeId(4), 1.2),
             Edge::new(EdgeId(4), NodeId(2), NodeId(5), 1.4),
             Edge::new(EdgeId(5), NodeId(5), NodeId(6), 0.6),

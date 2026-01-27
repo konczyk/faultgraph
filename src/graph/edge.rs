@@ -13,17 +13,17 @@ pub struct Edge {
     id: EdgeId,
     from: NodeId,
     to: NodeId,
-    /// multiplier >= 0.0
-    multiplier: f64,
+    /// weight >= 0.0
+    weight: f64,
 }
 
 impl Edge {
-    pub fn new(id: EdgeId, from: NodeId, to: NodeId, multiplier: f64) -> Self {
+    pub fn new(id: EdgeId, from: NodeId, to: NodeId, weight: f64) -> Self {
         Self {
             id,
             from,
             to,
-            multiplier,
+            weight,
         }
     }
 
@@ -39,7 +39,7 @@ impl Edge {
         self.to
     }
 
-    pub fn multiplier(&self) -> f64 {
-        self.multiplier
+    pub fn weight(&self) -> f64 {
+        self.weight
     }
 }

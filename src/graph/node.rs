@@ -12,14 +12,17 @@ pub struct Node {
     name: String,
     /// capacity > 0.0
     capacity: f64,
+    /// gain >= 0.0
+    gain: f64,
 }
 
 impl Node {
-    pub fn new(id: NodeId, name: String, capacity: f64) -> Self {
+    pub fn new(id: NodeId, name: String, capacity: f64, gain: f64) -> Self {
         Self {
             id,
             name: name.into(),
             capacity,
+            gain,
         }
     }
 
@@ -29,5 +32,9 @@ impl Node {
 
     pub fn capacity(&self) -> f64 {
         self.capacity
+    }
+
+    pub fn gain(&self) -> f64 {
+        self.gain
     }
 }

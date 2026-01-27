@@ -108,11 +108,11 @@ mod tests {
 
     #[test]
     fn test_avg_utilisation_per_group() {
-        let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0);
-        let db1 = Node::new(NodeId(1), "db1".to_string(), 60.0);
+        let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0, 1.0);
+        let db1 = Node::new(NodeId(1), "db1".to_string(), 60.0, 1.0);
         let link1 = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
-        let api2 = Node::new(NodeId(2), "api2".to_string(), 80.0);
-        let db2 = Node::new(NodeId(3), "db2".to_string(), 10.0);
+        let api2 = Node::new(NodeId(2), "api2".to_string(), 80.0, 1.0);
+        let db2 = Node::new(NodeId(3), "db2".to_string(), 10.0, 1.0);
         let link2 = Edge::new(EdgeId(1), NodeId(2), NodeId(3), 1.0);
 
         let graph = Graph::new(vec![api1, db1, api2, db2], vec![link1, link2]);
@@ -158,14 +158,14 @@ mod tests {
 
     #[test]
     fn test_trend_detection() {
-        let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0);
-        let db1 = Node::new(NodeId(1), "db1".to_string(), 60.0);
+        let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0, 1.0);
+        let db1 = Node::new(NodeId(1), "db1".to_string(), 60.0, 1.0);
         let link1 = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
-        let api2 = Node::new(NodeId(2), "api2".to_string(), 80.0);
-        let db2 = Node::new(NodeId(3), "db2".to_string(), 10.0);
+        let api2 = Node::new(NodeId(2), "api2".to_string(), 80.0, 1.0);
+        let db2 = Node::new(NodeId(3), "db2".to_string(), 10.0, 1.0);
         let link2 = Edge::new(EdgeId(1), NodeId(2), NodeId(3), 1.0);
-        let api3 = Node::new(NodeId(4), "api3".to_string(), 30.0);
-        let db3 = Node::new(NodeId(5), "db3".to_string(), 70.0);
+        let api3 = Node::new(NodeId(4), "api3".to_string(), 30.0, 1.0);
+        let db3 = Node::new(NodeId(5), "db3".to_string(), 70.0, 1.0);
         let link3 = Edge::new(EdgeId(2), NodeId(4), NodeId(5), 1.0);
 
         let graph = Graph::new(
@@ -225,20 +225,20 @@ mod tests {
 
     #[test]
     fn test_health_classification_at_boundaries() {
-        let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0);
-        let db1 = Node::new(NodeId(1), "db1".to_string(), 60.0);
+        let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0, 1.0);
+        let db1 = Node::new(NodeId(1), "db1".to_string(), 60.0, 1.0);
         let link1 = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
-        let api2 = Node::new(NodeId(2), "api2".to_string(), 200.0);
-        let db2 = Node::new(NodeId(3), "db2".to_string(), 60.0);
+        let api2 = Node::new(NodeId(2), "api2".to_string(), 200.0, 1.0);
+        let db2 = Node::new(NodeId(3), "db2".to_string(), 60.0, 1.0);
         let link2 = Edge::new(EdgeId(1), NodeId(2), NodeId(3), 2.0);
 
-        let api3 = Node::new(NodeId(4), "api3".to_string(), 200.0);
-        let db3 = Node::new(NodeId(5), "db3".to_string(), 60.0);
+        let api3 = Node::new(NodeId(4), "api3".to_string(), 200.0, 1.0);
+        let db3 = Node::new(NodeId(5), "db3".to_string(), 60.0, 1.0);
         let link3 = Edge::new(EdgeId(2), NodeId(4), NodeId(5), 2.0);
 
-        let api4 = Node::new(NodeId(6), "api4".to_string(), 200.0);
-        let db4 = Node::new(NodeId(7), "db4".to_string(), 60.0);
+        let api4 = Node::new(NodeId(6), "api4".to_string(), 200.0, 1.0);
+        let db4 = Node::new(NodeId(7), "db4".to_string(), 60.0, 1.0);
         let link4 = Edge::new(EdgeId(3), NodeId(6), NodeId(7), 2.0);
 
         let graph = Graph::new(

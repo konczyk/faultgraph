@@ -92,7 +92,8 @@ impl SimulationEngine {
             .for_each(|(_, e)| {
                 let f_id = e.from().index();
                 let t_id = e.to().index();
-                prop[t_id] += states[f_id].served() * e.multiplier();
+                let multiplier = self.graph.node_by_id(NodeId(f_id)).gain();
+                prop[t_id] += states[f_id].served() * multiplier;
             });
 
         self.scenario.entry_nodes().iter().for_each(|id| {
@@ -221,8 +222,8 @@ mod tests {
 
     #[test]
     fn test_one_hop_propagation() {
-        let api = Node::new(NodeId(0), "api".to_string(), 100.0);
-        let db = Node::new(NodeId(1), "db".to_string(), 60.0);
+        let api = Node::new(NodeId(0), "api".to_string(), 100.0, 1.0);
+        let db = Node::new(NodeId(1), "db".to_string(), 60.0, 1.0);
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
@@ -276,9 +277,9 @@ mod tests {
 
     #[test]
     fn test_edge_multiplier_correctness() {
-        let api = Node::new(NodeId(0), "api".to_string(), 100.0);
-        let db = Node::new(NodeId(1), "db".to_string(), 60.0);
-        let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 2.0);
+        let api = Node::new(NodeId(0), "api".to_string(), 100.0, 2.0);
+        let db = Node::new(NodeId(1), "db".to_string(), 60.0, 1.0);
+        let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
         let initial_snapshot = snapshot(&graph);
@@ -303,8 +304,8 @@ mod tests {
 
     #[test]
     fn test_disabled_edge_block_propagation() {
-        let api = Node::new(NodeId(0), "api".to_string(), 100.0);
-        let db = Node::new(NodeId(1), "db".to_string(), 60.0);
+        let api = Node::new(NodeId(0), "api".to_string(), 100.0, 1.0);
+        let db = Node::new(NodeId(1), "db".to_string(), 60.0, 1.0);
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 2.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
@@ -342,8 +343,8 @@ mod tests {
 
     #[test]
     fn test_unhealthy_nodes_do_not_propagate_load() {
-        let api = Node::new(NodeId(0), "api".to_string(), 100.0);
-        let db = Node::new(NodeId(1), "db".to_string(), 60.0);
+        let api = Node::new(NodeId(0), "api".to_string(), 100.0, 1.0);
+        let db = Node::new(NodeId(1), "db".to_string(), 60.0, 1.0);
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 2.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
@@ -406,8 +407,8 @@ mod tests {
 
     #[test]
     fn test_backlog_accumulates_when_over_capacity() {
-        let api = Node::new(NodeId(0), "api".to_string(), 100.0);
-        let db = Node::new(NodeId(1), "db".to_string(), 40.0);
+        let api = Node::new(NodeId(0), "api".to_string(), 100.0, 1.0);
+        let db = Node::new(NodeId(1), "db".to_string(), 40.0, 1.0);
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
@@ -461,8 +462,8 @@ mod tests {
 
     #[test]
     fn test_backlog_drains_when_below_capacity() {
-        let api = Node::new(NodeId(0), "api".to_string(), 100.0);
-        let db = Node::new(NodeId(1), "db".to_string(), 40.0);
+        let api = Node::new(NodeId(0), "api".to_string(), 100.0, 1.0);
+        let db = Node::new(NodeId(1), "db".to_string(), 40.0, 1.0);
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
@@ -528,8 +529,8 @@ mod tests {
 
     #[test]
     fn test_throttle() {
-        let api = Node::new(NodeId(0), "api".to_string(), 100.0);
-        let db = Node::new(NodeId(1), "db".to_string(), 40.0);
+        let api = Node::new(NodeId(0), "api".to_string(), 100.0, 1.0);
+        let db = Node::new(NodeId(1), "db".to_string(), 40.0, 1.0);
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
@@ -584,8 +585,8 @@ mod tests {
 
     #[test]
     fn test_boost() {
-        let api = Node::new(NodeId(0), "api".to_string(), 100.0);
-        let db = Node::new(NodeId(1), "db".to_string(), 40.0);
+        let api = Node::new(NodeId(0), "api".to_string(), 100.0, 1.0);
+        let db = Node::new(NodeId(1), "db".to_string(), 40.0, 1.0);
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
