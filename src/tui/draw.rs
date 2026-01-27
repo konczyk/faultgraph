@@ -1,12 +1,12 @@
 use crate::analysis::groups::{GroupHealth, GroupTrend};
 use crate::graph::node::NodeId;
 use crate::tui::app::App;
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::Color::{Black, Gray, LightGreen, White};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Cell, Padding, Paragraph, Row, Table};
-use ratatui::Frame;
 
 pub fn draw_app(frame: &mut Frame, app: &App) {
     let main = Layout::vertical([
@@ -66,7 +66,7 @@ fn build_indicators(app: &'_ App) -> Paragraph<'_> {
     let avg_load = if entry_nodes.len() > 0 {
         entry_nodes
             .iter()
-            .map(|id| states[id.index()].load())
+            .map(|id| states[id.index()].served())
             .sum::<f64>()
             / entry_nodes.len() as f64
     } else {
@@ -79,7 +79,7 @@ fn build_indicators(app: &'_ App) -> Paragraph<'_> {
         .node_states()
         .iter()
         .enumerate()
-        .map(|(i, s)| s.load() / nodes[i].capacity())
+        .map(|(i, s)| s.served() / nodes[i].capacity())
         .sum::<f64>()
         / nodes.len() as f64;
 
@@ -122,16 +122,6 @@ fn build_status(_app: &'_ App) -> Paragraph<'_> {
         Span::from(" [T]"),
         Span::from(" Throttle ").bold(),
     ]))
-}
-
-fn util_style(utilization: f64) -> Style {
-    if utilization < 0.8 {
-        Style::default().fg(Color::Green)
-    } else if utilization <= 1.0 {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::Red)
-    }
 }
 
 fn dots(turns: u8) -> String {
@@ -194,10 +184,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
             Row::new(vec![
                 Cell::from(summary.name().to_owned()),
                 Cell::from(Line::from(vec![
-                    Span::styled(
-                        format!("{:>7.1}", summary.avg_utilization() * 100.0),
-                        util_style(summary.avg_utilization()),
-                    ),
+                    Span::from(format!("{:>7.1}", summary.avg_utilization() * 100.0)),
                     Span::from(util_trend),
                 ])),
                 Cell::from(format!("{:>5}", summary.node_count())),
@@ -246,7 +233,7 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
             (
                 i,
                 if node.capacity() > 0.0 {
-                    state.load() / node.capacity()
+                    state.served() / node.capacity()
                 } else {
                     0.0
                 },
@@ -263,8 +250,8 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
             Row::new(vec![
                 Cell::from(i.to_string()),
                 Cell::from(node.name()),
-                Cell::from(format!("{:>7.1}", utilization * 100.0)).style(util_style(*utilization)),
-                Cell::from(format!("{:>8.1}", state.load())),
+                Cell::from(format!("{:>7.1}", utilization * 100.0)),
+                Cell::from(format!("{:>8.1}", state.served())),
                 Cell::from(format!("{:>6.1}", node.capacity())),
                 Cell::from(format!("{:>6.1}", state.health() * 100.0)),
                 Cell::from(mods(app, app.engine.group_by_node_id(*i))),

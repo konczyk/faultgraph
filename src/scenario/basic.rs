@@ -50,7 +50,7 @@ impl BasicScenario {
         let node_states = graph
             .nodes()
             .iter()
-            .map(|_| NodeState::new(0.0, 1.0))
+            .map(|_| NodeState::new(0.0, 0.0, 0.0, 1.0))
             .collect();
 
         let edge_states = graph.edges().iter().map(|_| EdgeState::new(true)).collect();

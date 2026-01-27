@@ -10,7 +10,7 @@ fn calc_util(snapshot: &Snapshot, group: &Group, graph: &Graph) -> f64 {
         .map(|id| {
             let capacity = graph.node_by_id(*id).capacity();
             if capacity > 0.0 {
-                states[id.index()].load() / capacity
+                states[id.index()].served() / capacity
             } else {
                 0.0
             }
@@ -24,7 +24,7 @@ fn calc_health(snapshot: &Snapshot, group: &Group) -> f64 {
     let h = group
         .nodes()
         .iter()
-        .map(|id| states[id.index()])
+        .map(|id| &states[id.index()])
         .map(|s| s.health())
         .collect::<Vec<f64>>();
     if h.len() == 0 {
@@ -117,10 +117,10 @@ mod tests {
         let previous_snapshot = Snapshot::new(
             5,
             vec![
-                NodeState::new(20.0, 0.9),
-                NodeState::new(10.0, 0.06),
-                NodeState::new(60.0, 0.2),
-                NodeState::new(40.0, 0.6),
+                NodeState::new(0.0, 20.0, 0.0, 0.9),
+                NodeState::new(0.0, 10.0, 0.0, 0.06),
+                NodeState::new(0.0, 60.0, 0.0, 0.2),
+                NodeState::new(0.0, 40.0, 0.0, 0.6),
             ],
             vec![EdgeState::new(true), EdgeState::new(true)],
         );
@@ -128,10 +128,10 @@ mod tests {
         let current_snapshot = Snapshot::new(
             6,
             vec![
-                NodeState::new(10.0, 0.5),
-                NodeState::new(50.0, 0.2),
-                NodeState::new(30.0, 0.05),
-                NodeState::new(90.0, 0.8),
+                NodeState::new(0.0, 10.0, 0.0, 0.5),
+                NodeState::new(0.0, 50.0, 0.0, 0.2),
+                NodeState::new(0.0, 30.0, 0.0, 0.05),
+                NodeState::new(0.0, 90.0, 0.0, 0.8),
             ],
             vec![EdgeState::new(true), EdgeState::new(true)],
         );
@@ -174,12 +174,12 @@ mod tests {
         let previous_snapshot = Snapshot::new(
             5,
             vec![
-                NodeState::new(20.0, 0.9),
-                NodeState::new(10.0, 0.06),
-                NodeState::new(60.0, 0.2),
-                NodeState::new(40.0, 0.6),
-                NodeState::new(10.0, 0.6),
-                NodeState::new(20.0, 0.1),
+                NodeState::new(0.0, 20.0, 0.0, 0.9),
+                NodeState::new(0.0, 10.0, 0.0, 0.06),
+                NodeState::new(0.0, 60.0, 0.0, 0.2),
+                NodeState::new(0.0, 40.0, 0.0, 0.6),
+                NodeState::new(0.0, 10.0, 0.0, 0.6),
+                NodeState::new(0.0, 20.0, 0.0, 0.1),
             ],
             vec![
                 EdgeState::new(true),
@@ -191,12 +191,12 @@ mod tests {
         let current_snapshot = Snapshot::new(
             6,
             vec![
-                NodeState::new(22.0, 0.93),
-                NodeState::new(10.0, 0.07),
-                NodeState::new(66.0, 0.17),
-                NodeState::new(40.0, 0.6),
-                NodeState::new(10.0, 0.6),
-                NodeState::new(16.0, 0.1),
+                NodeState::new(0.0, 22.0, 0.0, 0.93),
+                NodeState::new(0.0, 10.0, 0.0, 0.07),
+                NodeState::new(0.0, 66.0, 0.0, 0.17),
+                NodeState::new(0.0, 40.0, 0.0, 0.6),
+                NodeState::new(0.0, 10.0, 0.0, 0.6),
+                NodeState::new(0.0, 16.0, 0.0, 0.1),
             ],
             vec![
                 EdgeState::new(true),
@@ -216,7 +216,7 @@ mod tests {
     }
 
     #[test]
-    fn test_risk_classification_at_boundaries() {
+    fn test_health_classification_at_boundaries() {
         let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0);
         let db1 = Node::new(NodeId(1), "db1".to_string(), 60.0);
         let link1 = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
@@ -248,14 +248,14 @@ mod tests {
         let previous_snapshot = Snapshot::new(
             5,
             vec![
-                NodeState::new(20.0, 0.9),
-                NodeState::new(10.0, 0.8),
-                NodeState::new(20.0, 0.1),
-                NodeState::new(10.0, 0.1),
-                NodeState::new(20.0, 0.9),
-                NodeState::new(10.0, 0.8),
-                NodeState::new(20.0, 0.9),
-                NodeState::new(10.0, 0.8),
+                NodeState::new(0.0, 20.0, 0.0, 0.9),
+                NodeState::new(0.0, 10.0, 0.0, 0.8),
+                NodeState::new(0.0, 20.0, 0.0, 0.1),
+                NodeState::new(0.0, 10.0, 0.0, 0.1),
+                NodeState::new(0.0, 20.0, 0.0, 0.9),
+                NodeState::new(0.0, 10.0, 0.0, 0.8),
+                NodeState::new(0.0, 20.0, 0.0, 0.9),
+                NodeState::new(0.0, 10.0, 0.0, 0.8),
             ],
             vec![
                 EdgeState::new(true),
@@ -268,14 +268,14 @@ mod tests {
         let current_snapshot = Snapshot::new(
             6,
             vec![
-                NodeState::new(20.0, 0.9),
-                NodeState::new(10.0, 0.8),
-                NodeState::new(20.0, 0.3),
-                NodeState::new(10.0, 0.2),
-                NodeState::new(20.0, 0.1),
-                NodeState::new(10.0, 0.05),
-                NodeState::new(20.0, 0.0),
-                NodeState::new(10.0, 0.0),
+                NodeState::new(0.0, 20.0, 0.0, 0.9),
+                NodeState::new(0.0, 10.0, 0.0, 0.8),
+                NodeState::new(0.0, 20.0, 0.0, 0.3),
+                NodeState::new(0.0, 10.0, 0.0, 0.2),
+                NodeState::new(0.0, 20.0, 0.0, 0.1),
+                NodeState::new(0.0, 10.0, 0.0, 0.05),
+                NodeState::new(0.0, 20.0, 0.0, 0.0),
+                NodeState::new(0.0, 10.0, 0.0, 0.0),
             ],
             vec![
                 EdgeState::new(true),
