@@ -79,7 +79,8 @@ impl SimulationEngine {
     }
 
     pub fn step(&mut self) {
-        let states = self.current_snapshot.node_states();
+        let node_states = self.current_snapshot.node_states();
+        let edge_states = self.current_snapshot.edge_states();
         let mut prop = vec![0.0; self.graph.node_count()];
 
         self.current_snapshot
@@ -88,22 +89,23 @@ impl SimulationEngine {
             .enumerate()
             .filter(|(_, state)| state.is_enabled())
             .map(|(i, _)| (i, self.graph.edge_by_id(EdgeId(i))))
-            .filter(|(_, e)| states[e.from().index()].is_healthy())
+            .filter(|(_, e)| node_states[e.from().index()].is_healthy())
             .for_each(|(_, e)| {
                 let f_id = e.from().index();
                 let t_id = e.to().index();
                 let multiplier = self.graph.node_by_id(NodeId(f_id)).gain();
-                prop[t_id] += states[f_id].served() * multiplier;
+                prop[t_id] += node_states[f_id].served() * multiplier;
             });
 
         self.scenario.entry_nodes().iter().for_each(|id| {
             prop[id.index()] += self.scenario.load(*id, self.current_snapshot.turn())
         });
 
-        let mut new_node_states = states.clone();
+        let mut new_node_states = node_states.clone();
         new_node_states.iter_mut().enumerate().for_each(|(i, n)| {
             let throttle = self.capacity_mods[self.node_to_group[i]].factor();
             let capacity = self.graph.node_by_id(NodeId(i)).capacity() * throttle;
+            let outgoing_edges = self.graph.outgoing(NodeId(i));
             let total = prop[i] + n.backlog();
 
             n.set_demand(prop[i]);
@@ -112,8 +114,21 @@ impl SimulationEngine {
                 n.set_backlog(0.0);
                 return;
             }
+
             n.set_served(capacity.min(total));
-            n.set_backlog(total - n.served());
+
+            if outgoing_edges.len() > 0
+                && outgoing_edges
+                    .iter()
+                    .map(|e_id| edge_states[e_id.index()])
+                    .filter(|e| e.is_enabled())
+                    .count()
+                    == 0
+            {
+                n.set_backlog(total);
+            } else {
+                n.set_backlog(total - n.served());
+            }
 
             if capacity == 0.0 {
                 return;
@@ -127,7 +142,7 @@ impl SimulationEngine {
         });
 
         let turn = self.current_snapshot.turn() + 1;
-        let new_edge_states = self.current_snapshot.edge_states().clone();
+        let new_edge_states = edge_states.clone();
 
         let old_snapshot = mem::replace(
             &mut self.current_snapshot,
@@ -334,10 +349,15 @@ mod tests {
             Box::new(TestScenario::new(vec![NodeId(0)], vec![10.0, 20.0, 30.0])),
         );
         engine.step();
+        let node_states = engine.current_snapshot.node_states();
+        assert_relative_eq!(10.0, node_states[0].served());
+        assert_relative_eq!(10.0, node_states[0].backlog());
+        assert_relative_eq!(0.0, node_states[1].served());
         engine.step();
 
         let node_states = engine.current_snapshot.node_states();
-        assert_relative_eq!(20.0, node_states[0].served());
+        assert_relative_eq!(30.0, node_states[0].served());
+        assert_relative_eq!(30.0, node_states[0].backlog());
         assert_relative_eq!(0.0, node_states[1].served());
     }
 
