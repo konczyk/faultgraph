@@ -76,6 +76,13 @@ pub fn aggregate_groups(
                 _ => GroupHealth::Failed,
             };
 
+            let states = current_snapshot.node_states();
+            let healthy_nodes = g
+                .nodes()
+                .iter()
+                .filter(|n_id| states[n_id.index()].is_healthy())
+                .count();
+
             GroupSummary::new(
                 g.name().to_string(),
                 curr_avg_util,
@@ -84,6 +91,7 @@ pub fn aggregate_groups(
                 curr_health,
                 health,
                 health_trend,
+                healthy_nodes,
             )
         })
         .collect()

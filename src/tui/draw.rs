@@ -194,7 +194,10 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
                     Span::from(format!("{:>7.1}", summary.avg_utilization() * 100.0)),
                     Span::from(util_trend),
                 ])),
-                Cell::from(format!("{:>5}", summary.node_count())),
+                Cell::from(format!(
+                    "{:>8}",
+                    format!("{} / {}", summary.healthy_nodes(), summary.node_count())
+                )),
                 Cell::from(Line::from(vec![
                     Span::styled(format!("{:>9}", summary.health()), health_style),
                     Span::from(health_trend),
@@ -215,7 +218,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
         Row::new([
             Cell::from("Group"),
             Cell::from("   Util %"),
-            Cell::from(" Nodes"),
+            Cell::from("   Nodes"),
             Cell::from("    Status"),
             Cell::from(" Mods"),
         ])

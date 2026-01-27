@@ -69,6 +69,7 @@ pub struct GroupSummary {
     raw_health: f64,
     health: GroupHealth,
     health_trend: GroupTrend,
+    healthy_nodes: usize,
 }
 
 impl GroupSummary {
@@ -80,6 +81,7 @@ impl GroupSummary {
         raw_health: f64,
         health: GroupHealth,
         health_trend: GroupTrend,
+        healthy_nodes: usize,
     ) -> Self {
         Self {
             name,
@@ -89,6 +91,7 @@ impl GroupSummary {
             raw_health,
             health,
             health_trend,
+            healthy_nodes,
         }
     }
 
@@ -118,5 +121,9 @@ impl GroupSummary {
 
     pub fn health_trend(&self) -> &GroupTrend {
         &self.health_trend
+    }
+
+    pub fn healthy_nodes(&self) -> usize {
+        self.healthy_nodes
     }
 }
