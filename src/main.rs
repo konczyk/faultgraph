@@ -42,6 +42,11 @@ fn main() -> io::Result<()> {
                 {
                     app.engine.try_throttle_group(app.selected_group_id());
                 }
+                Event::Key(key)
+                    if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('b') =>
+                {
+                    app.engine.try_boost_group(app.selected_group_id());
+                }
                 Event::Key(key) if key.kind == KeyEventKind::Press && key.code == Up => {
                     app.select_previous_group();
                 }

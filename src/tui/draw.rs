@@ -121,6 +121,8 @@ fn build_status(_app: &'_ App) -> Paragraph<'_> {
         Span::from(" Step ").bold(),
         Span::from(" [T]"),
         Span::from(" Throttle ").bold(),
+        Span::from(" [B]"),
+        Span::from(" Boost ").bold(),
     ]))
 }
 
@@ -137,16 +139,21 @@ fn dots(turns: u8) -> String {
 
 fn mods(app: &'_ App, group_id: usize) -> Line<'_> {
     let mut mods = Line::default();
-    let throttle = app.engine.throttle(group_id);
-    if throttle.is_active() {
-        let turns = dots(throttle.remaining_turns());
+    let capacity_mod = app.engine.capacity_modifier(group_id);
+    if capacity_mod.is_active() {
+        let turns = dots(capacity_mod.remaining_turns());
         let span;
-        if throttle.is_just_applied() {
-            span = Span::from(format!(" Tx{}{} ", throttle.factor(), turns))
+        let mod_type = if capacity_mod.factor() > 1.0 {
+            "B"
+        } else {
+            "T"
+        };
+        if capacity_mod.is_just_applied() {
+            span = Span::from(format!(" {mod_type}x{}{} ", capacity_mod.factor(), turns))
                 .bg(LightGreen)
                 .bold();
         } else {
-            span = Span::from(format!(" Tx{}{} ", throttle.factor(), turns)).dim();
+            span = Span::from(format!(" {mod_type}x{}{} ", capacity_mod.factor(), turns)).dim();
         }
         mods.spans.push(span);
     }

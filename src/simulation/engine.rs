@@ -3,7 +3,7 @@ use crate::graph::edge::EdgeId;
 use crate::graph::graph::Graph;
 use crate::graph::node::NodeId;
 use crate::scenario::scenario::Scenario;
-use crate::simulation::modifiers::Throttle;
+use crate::simulation::modifiers::CapacityModifier;
 use crate::state::snapshot::Snapshot;
 use std::mem;
 
@@ -14,7 +14,7 @@ pub struct SimulationEngine {
     current_snapshot: Snapshot,
     scenario: Box<dyn Scenario>,
     remaining_ops: u8,
-    throttles: Vec<Throttle>,
+    capacity_mods: Vec<CapacityModifier>,
     node_to_group: Vec<usize>,
 }
 
@@ -53,7 +53,7 @@ impl SimulationEngine {
             current_snapshot: initial_snapshot,
             scenario,
             remaining_ops,
-            throttles: vec![Throttle::new(); groups_cnt],
+            capacity_mods: vec![CapacityModifier::new(); groups_cnt],
             node_to_group,
         }
     }
@@ -92,8 +92,7 @@ impl SimulationEngine {
             .for_each(|(_, e)| {
                 let f_id = e.from().index();
                 let t_id = e.to().index();
-                let throttle = self.throttles[self.node_to_group[f_id]].factor();
-                prop[t_id] += states[f_id].served() * e.multiplier() * throttle;
+                prop[t_id] += states[f_id].served() * e.multiplier();
             });
 
         self.scenario.entry_nodes().iter().for_each(|id| {
@@ -102,7 +101,8 @@ impl SimulationEngine {
 
         let mut new_node_states = states.clone();
         new_node_states.iter_mut().enumerate().for_each(|(i, n)| {
-            let capacity = self.graph.node_by_id(NodeId(i)).capacity();
+            let throttle = self.capacity_mods[self.node_to_group[i]].factor();
+            let capacity = self.graph.node_by_id(NodeId(i)).capacity() * throttle;
             let total = prop[i] + n.backlog();
 
             n.set_demand(prop[i]);
@@ -114,6 +114,9 @@ impl SimulationEngine {
             n.set_served(capacity.min(total));
             n.set_backlog(total - n.served());
 
+            if capacity == 0.0 {
+                return;
+            }
             let pressure = total / capacity;
             let k = 0.1;
             if pressure > 1.0 {
@@ -133,7 +136,7 @@ impl SimulationEngine {
         self.previous_snapshot = Some(old_snapshot);
 
         self.remaining_ops = self.scenario.ops_per_turn();
-        self.throttles.iter_mut().for_each(|t| t.tick());
+        self.capacity_mods.iter_mut().for_each(|t| t.tick());
     }
 
     pub fn current_snapshot(&self) -> &Snapshot {
@@ -146,14 +149,22 @@ impl SimulationEngine {
             .unwrap_or(&self.current_snapshot)
     }
 
-    pub fn try_throttle_group(&mut self, group_id: usize) {
-        if self.remaining_ops > 0 && self.throttles[group_id].apply(0.5) {
+    fn try_capacity_modifier(&mut self, group_id: usize, factor: f64) {
+        if self.remaining_ops > 0 && self.capacity_mods[group_id].apply(factor) {
             self.remaining_ops -= 1;
         }
     }
 
-    pub fn throttle(&self, group_id: usize) -> &Throttle {
-        &self.throttles[group_id]
+    pub fn try_throttle_group(&mut self, group_id: usize) {
+        self.try_capacity_modifier(group_id, 0.5);
+    }
+
+    pub fn try_boost_group(&mut self, group_id: usize) {
+        self.try_capacity_modifier(group_id, 1.5);
+    }
+
+    pub fn capacity_modifier(&self, group_id: usize) -> &CapacityModifier {
+        &self.capacity_mods[group_id]
     }
 }
 
@@ -377,7 +388,7 @@ mod tests {
         assert_relative_eq!(0.0, node_states[0].served());
         assert_relative_eq!(0.0, node_states[1].served());
 
-        assert_relative_eq!(10.0, node_states[0].backlog());
+        assert_relative_eq!(0.0, node_states[0].backlog());
         assert_relative_eq!(0.0, node_states[1].backlog());
 
         engine.step();
@@ -389,7 +400,7 @@ mod tests {
         assert_relative_eq!(0.0, node_states[0].served());
         assert_relative_eq!(0.0, node_states[1].served());
 
-        assert_relative_eq!(30.0, node_states[0].backlog());
+        assert_relative_eq!(0.0, node_states[0].backlog());
         assert_relative_eq!(0.0, node_states[1].backlog());
     }
 
@@ -513,5 +524,117 @@ mod tests {
 
         assert_relative_eq!(0.0, node_states[0].backlog());
         assert_relative_eq!(0.0, node_states[1].backlog());
+    }
+
+    #[test]
+    fn test_throttle() {
+        let api = Node::new(NodeId(0), "api".to_string(), 100.0);
+        let db = Node::new(NodeId(1), "db".to_string(), 40.0);
+        let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
+
+        let graph = Graph::new(vec![api, db], vec![link]);
+        let initial_snapshot = snapshot(&graph);
+        let groups = GroupSet::new(vec![
+            Group::new("group1".to_string(), vec![NodeId(0)]),
+            Group::new("group2".to_string(), vec![NodeId(1)]),
+        ]);
+
+        let mut engine = SimulationEngine::new(
+            graph,
+            groups,
+            initial_snapshot,
+            Box::new(TestScenario::new(vec![NodeId(0)], vec![100.0, 80.0, 20.0])),
+        );
+        engine.try_throttle_group(0);
+
+        let node_states = engine.current_snapshot.node_states();
+        assert_relative_eq!(0.0, node_states[0].demand());
+        assert_relative_eq!(0.0, node_states[1].demand());
+
+        assert_relative_eq!(0.0, node_states[0].served());
+        assert_relative_eq!(0.0, node_states[1].served());
+
+        assert_relative_eq!(0.0, node_states[0].backlog());
+        assert_relative_eq!(0.0, node_states[1].backlog());
+
+        engine.step();
+
+        let node_states = engine.current_snapshot.node_states();
+        assert_relative_eq!(100.0, node_states[0].demand());
+        assert_relative_eq!(0.0, node_states[1].demand());
+
+        assert_relative_eq!(50.0, node_states[0].served());
+        assert_relative_eq!(0.0, node_states[1].served());
+
+        assert_relative_eq!(50.0, node_states[0].backlog());
+        assert_relative_eq!(0.0, node_states[1].backlog());
+
+        engine.step();
+
+        let node_states = engine.current_snapshot.node_states();
+        assert_relative_eq!(80.0, node_states[0].demand());
+        assert_relative_eq!(50.0, node_states[1].demand());
+
+        assert_relative_eq!(50.0, node_states[0].served());
+        assert_relative_eq!(40.0, node_states[1].served());
+
+        assert_relative_eq!(80.0, node_states[0].backlog());
+        assert_relative_eq!(10.0, node_states[1].backlog());
+    }
+
+    #[test]
+    fn test_boost() {
+        let api = Node::new(NodeId(0), "api".to_string(), 100.0);
+        let db = Node::new(NodeId(1), "db".to_string(), 40.0);
+        let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
+
+        let graph = Graph::new(vec![api, db], vec![link]);
+        let initial_snapshot = snapshot(&graph);
+        let groups = GroupSet::new(vec![
+            Group::new("group1".to_string(), vec![NodeId(0)]),
+            Group::new("group2".to_string(), vec![NodeId(1)]),
+        ]);
+
+        let mut engine = SimulationEngine::new(
+            graph,
+            groups,
+            initial_snapshot,
+            Box::new(TestScenario::new(vec![NodeId(0)], vec![200.0, 110.0, 50.0])),
+        );
+        engine.try_boost_group(0);
+
+        let node_states = engine.current_snapshot.node_states();
+        assert_relative_eq!(0.0, node_states[0].demand());
+        assert_relative_eq!(0.0, node_states[1].demand());
+
+        assert_relative_eq!(0.0, node_states[0].served());
+        assert_relative_eq!(0.0, node_states[1].served());
+
+        assert_relative_eq!(0.0, node_states[0].backlog());
+        assert_relative_eq!(0.0, node_states[1].backlog());
+
+        engine.step();
+
+        let node_states = engine.current_snapshot.node_states();
+        assert_relative_eq!(200.0, node_states[0].demand());
+        assert_relative_eq!(0.0, node_states[1].demand());
+
+        assert_relative_eq!(150.0, node_states[0].served());
+        assert_relative_eq!(0.0, node_states[1].served());
+
+        assert_relative_eq!(50.0, node_states[0].backlog());
+        assert_relative_eq!(0.0, node_states[1].backlog());
+
+        engine.step();
+
+        let node_states = engine.current_snapshot.node_states();
+        assert_relative_eq!(110.0, node_states[0].demand());
+        assert_relative_eq!(150.0, node_states[1].demand());
+
+        assert_relative_eq!(150.0, node_states[0].served());
+        assert_relative_eq!(40.0, node_states[1].served());
+
+        assert_relative_eq!(10.0, node_states[0].backlog());
+        assert_relative_eq!(110.0, node_states[1].backlog());
     }
 }

@@ -1,5 +1,5 @@
 #[derive(Clone)]
-pub struct Throttle {
+pub struct CapacityModifier {
     factor: f64,
     active: bool,
     just_applied: bool,
@@ -7,7 +7,7 @@ pub struct Throttle {
     remaining: u8,
 }
 
-impl Throttle {
+impl CapacityModifier {
     const BASELINE_FACTOR: f64 = 1.0;
 
     pub fn new() -> Self {
