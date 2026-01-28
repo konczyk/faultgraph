@@ -83,18 +83,36 @@ impl SimulationEngine {
         let edge_states = self.current_snapshot.edge_states();
         let mut prop = vec![0.0; self.graph.node_count()];
 
-        self.current_snapshot
-            .edge_states()
+        node_states
             .iter()
             .enumerate()
-            .filter(|(_, state)| state.is_enabled())
-            .map(|(i, _)| (i, self.graph.edge_by_id(EdgeId(i))))
-            .filter(|(_, e)| node_states[e.from().index()].is_healthy())
-            .for_each(|(_, e)| {
-                let f_id = e.from().index();
-                let t_id = e.to().index();
-                let multiplier = self.graph.node_by_id(NodeId(f_id)).gain();
-                prop[t_id] += node_states[f_id].served() * multiplier;
+            .map(|(n_id, _)| self.graph.node_by_id(NodeId(n_id)))
+            .filter(|n| node_states[n.id().index()].is_healthy())
+            .for_each(|n| {
+                let edges = self.graph.outgoing(*n.id());
+                let total_weight = edges
+                    .iter()
+                    .filter(|e_id| edge_states[e_id.index()].is_enabled())
+                    .map(|e_id| self.graph.edge_by_id(*e_id).weight())
+                    .sum::<f64>();
+
+                if total_weight == 0.0 {
+                    return;
+                }
+
+                edges
+                    .iter()
+                    .filter(|e_id| edge_states[e_id.index()].is_enabled())
+                    .map(|e_id| self.graph.edge_by_id(*e_id))
+                    .for_each(|e| {
+                        let f_id = n.id().index();
+                        let t_id = e.to().index();
+                        let served = node_states[f_id].served();
+                        if served > 0.0 {
+                            let total_demand = served * n.gain();
+                            prop[t_id] += total_demand * (e.weight() / total_weight);
+                        }
+                    })
             });
 
         self.scenario.entry_nodes().iter().for_each(|id| {
@@ -103,11 +121,6 @@ impl SimulationEngine {
 
         let mut new_node_states = node_states.clone();
         new_node_states.iter_mut().enumerate().for_each(|(i, n)| {
-            let throttle = self.capacity_mods[self.node_to_group[i]].factor();
-            let capacity = self.graph.node_by_id(NodeId(i)).capacity() * throttle;
-            let outgoing_edges = self.graph.outgoing(NodeId(i));
-            let total = prop[i] + n.backlog();
-
             n.set_demand(prop[i]);
             if !n.is_healthy() {
                 n.set_served(0.0);
@@ -115,16 +128,19 @@ impl SimulationEngine {
                 return;
             }
 
+            let throttle = self.capacity_mods[self.node_to_group[i]].factor();
+            let capacity = self.graph.node_by_id(NodeId(i)).capacity() * throttle;
+            let outgoing_edges = self.graph.outgoing(NodeId(i));
+            let total = prop[i] + n.backlog();
+
             n.set_served(capacity.min(total));
 
-            if outgoing_edges.len() > 0
-                && outgoing_edges
-                    .iter()
-                    .map(|e_id| edge_states[e_id.index()])
-                    .filter(|e| e.is_enabled())
-                    .count()
-                    == 0
-            {
+            let has_active_edge = outgoing_edges
+                .iter()
+                .find(|e_id| edge_states[e_id.index()].is_enabled())
+                .is_some();
+
+            if outgoing_edges.len() > 0 && !has_active_edge {
                 n.set_backlog(total);
             } else {
                 n.set_backlog(total - n.served());
@@ -657,5 +673,100 @@ mod tests {
 
         assert_relative_eq!(10.0, node_states[0].backlog());
         assert_relative_eq!(110.0, node_states[1].backlog());
+    }
+
+    #[test]
+    fn test_load_splitting() {
+        let api1 = Node::new(NodeId(0), "api1".to_string(), 100.0, 1.0);
+        let api2 = Node::new(NodeId(1), "api2".to_string(), 100.0, 1.0);
+        let db1 = Node::new(NodeId(2), "db1".to_string(), 40.0, 1.0);
+        let db2 = Node::new(NodeId(3), "db2".to_string(), 40.0, 1.0);
+        let db3 = Node::new(NodeId(4), "db3".to_string(), 40.0, 1.0);
+
+        let link1 = Edge::new(EdgeId(0), NodeId(0), NodeId(2), 1.0);
+        let link2 = Edge::new(EdgeId(1), NodeId(0), NodeId(3), 3.0);
+        let link3 = Edge::new(EdgeId(2), NodeId(0), NodeId(4), 5.0);
+
+        let link4 = Edge::new(EdgeId(3), NodeId(1), NodeId(2), 1.0);
+        let link5 = Edge::new(EdgeId(4), NodeId(1), NodeId(3), 1.0);
+
+        let graph = Graph::new(
+            vec![api1, api2, db1, db2, db3],
+            vec![link1, link2, link3, link4, link5],
+        );
+        let initial_snapshot = Snapshot::new(
+            0,
+            graph
+                .nodes()
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    NodeState::new(0.0, 0.0, 0.0, if i == 1 || i == 3 { 0.0 } else { 1.0 })
+                })
+                .collect(),
+            graph
+                .edges()
+                .iter()
+                .enumerate()
+                .map(|(i, _)| EdgeState::new(i != 2))
+                .collect(),
+        );
+        let groups = GroupSet::new(vec![
+            Group::new("group1".to_string(), vec![NodeId(0), NodeId(1)]),
+            Group::new("group2".to_string(), vec![NodeId(2), NodeId(3), NodeId(4)]),
+        ]);
+
+        let mut engine = SimulationEngine::new(
+            graph,
+            groups,
+            initial_snapshot,
+            Box::new(TestScenario::new(
+                vec![NodeId(0), NodeId(1)],
+                vec![10.0, 20.0, 30.0],
+            )),
+        );
+
+        let node_states = engine.current_snapshot.node_states();
+        assert_relative_eq!(0.0, node_states[0].demand());
+        assert_relative_eq!(0.0, node_states[1].demand());
+        assert_relative_eq!(0.0, node_states[2].demand());
+        assert_relative_eq!(0.0, node_states[3].demand());
+        assert_relative_eq!(0.0, node_states[4].demand());
+
+        assert_relative_eq!(0.0, node_states[0].served());
+        assert_relative_eq!(0.0, node_states[1].served());
+        assert_relative_eq!(0.0, node_states[2].served());
+        assert_relative_eq!(0.0, node_states[3].served());
+        assert_relative_eq!(0.0, node_states[4].served());
+
+        engine.step();
+
+        let node_states = engine.current_snapshot.node_states();
+        assert_relative_eq!(10.0, node_states[0].demand());
+        assert_relative_eq!(10.0, node_states[1].demand());
+        assert_relative_eq!(0.0, node_states[2].demand());
+        assert_relative_eq!(0.0, node_states[3].demand());
+        assert_relative_eq!(0.0, node_states[4].demand());
+
+        assert_relative_eq!(10.0, node_states[0].served());
+        assert_relative_eq!(0.0, node_states[1].served());
+        assert_relative_eq!(0.0, node_states[2].served());
+        assert_relative_eq!(0.0, node_states[3].served());
+        assert_relative_eq!(0.0, node_states[4].served());
+
+        engine.step();
+
+        let node_states = engine.current_snapshot.node_states();
+        assert_relative_eq!(20.0, node_states[0].demand());
+        assert_relative_eq!(20.0, node_states[1].demand());
+        assert_relative_eq!(2.5, node_states[2].demand());
+        assert_relative_eq!(7.5, node_states[3].demand());
+        assert_relative_eq!(0.0, node_states[4].demand());
+
+        assert_relative_eq!(20.0, node_states[0].served());
+        assert_relative_eq!(0.0, node_states[1].served());
+        assert_relative_eq!(2.5, node_states[2].served());
+        assert_relative_eq!(0.0, node_states[3].served());
+        assert_relative_eq!(0.0, node_states[4].served());
     }
 }

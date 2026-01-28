@@ -26,6 +26,10 @@ impl Node {
         }
     }
 
+    pub fn id(&self) -> &NodeId {
+        &self.id
+    }
+
     pub fn name(&self) -> &str {
         &self.name.as_str()
     }
