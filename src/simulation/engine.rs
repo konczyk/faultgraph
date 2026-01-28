@@ -128,6 +128,8 @@ impl SimulationEngine {
             if pressure > 1.0 {
                 let damage = k * (pressure - 1.0);
                 n.set_health(n.health() - damage);
+            } else if pressure < 1.0 && n.backlog() == 0.0 {
+                n.set_health(n.health() + 0.01);
             }
         });
 
