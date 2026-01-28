@@ -63,34 +63,46 @@ fn build_indicators(app: &'_ App) -> Paragraph<'_> {
     let states = app.engine.current_snapshot().node_states();
     let entry_nodes = app.engine.scenario().entry_nodes();
 
-    let avg_load = if entry_nodes.len() > 0 {
-        entry_nodes
-            .iter()
-            .map(|id| states[id.index()].served())
-            .sum::<f64>()
-            / entry_nodes.len() as f64
-    } else {
-        0.0
-    };
+    let incoming_load = entry_nodes
+        .iter()
+        .map(|id| {
+            app.engine
+                .scenario()
+                .load(*id, app.engine.current_snapshot().turn())
+        })
+        .sum::<f64>();
 
-    let avg_util = app
+    let (agg_util, cnt) = app
         .engine
         .current_snapshot()
         .node_states()
         .iter()
         .enumerate()
-        .map(|(i, s)| s.served() / nodes[i].capacity())
-        .sum::<f64>()
-        / nodes.len() as f64;
+        .filter(|(_, s)| s.is_healthy())
+        .map(|(i, s)| {
+            let capacity_mod = app
+                .engine
+                .current_snapshot()
+                .capacity_mod(app.engine.group_by_node_id(i));
+            s.served() / (nodes[i].capacity() * capacity_mod.factor())
+        })
+        .fold((0.0, 0), |acc, u| (acc.0 + u, acc.1 + 1));
 
-    let avg_health = app
+    let avg_util = if cnt == 0 { 0.0 } else { agg_util / cnt as f64 };
+
+    let (agg_health, cnt) = app
         .engine
         .current_snapshot()
         .node_states()
         .iter()
         .map(|s| s.health())
-        .sum::<f64>()
-        / nodes.len() as f64;
+        .fold((0.0, 0), |acc, h| (acc.0 + h, acc.1 + 1));
+
+    let avg_health = if cnt == 0 {
+        0.0
+    } else {
+        agg_health / cnt as f64
+    };
 
     let health_style = if avg_health < 0.4 {
         Style::default().fg(Color::Red)
@@ -102,13 +114,13 @@ fn build_indicators(app: &'_ App) -> Paragraph<'_> {
 
     Paragraph::new(Line::from(vec![
         Span::from(" L ").bold(),
-        Span::from(format!(" {}rps ", avg_load as usize)),
+        Span::from(format!(" {}rps ", incoming_load as usize)),
         Span::from(" | ").dim(),
         Span::from(" U ").bold(),
-        Span::from(format!(" {}%  ", (avg_util * 100.0) as usize)),
+        Span::from(format!(" {}%  ", (avg_util * 100.0).round() as usize)),
         Span::from(" | ").dim(),
         Span::from(" ♥ ").bold().style(health_style),
-        Span::from(format!(" {}% ", (avg_health * 100.0) as usize)).style(health_style),
+        Span::from(format!(" {}% ", (avg_health * 100.0).round() as usize)).style(health_style),
     ]))
     .right_aligned()
 }
