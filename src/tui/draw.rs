@@ -139,7 +139,7 @@ fn dots(turns: u8) -> String {
 
 fn mods(app: &'_ App, group_id: usize) -> Line<'_> {
     let mut mods = Line::default();
-    let capacity_mod = app.engine.capacity_modifier(group_id);
+    let capacity_mod = app.engine.current_snapshot().capacity_mod(group_id);
     if capacity_mod.is_active() {
         let turns = dots(capacity_mod.remaining_turns());
         let span;

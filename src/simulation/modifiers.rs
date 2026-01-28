@@ -59,7 +59,10 @@ impl CapacityModifier {
             return;
         }
 
-        self.just_applied = false;
+        if self.just_applied {
+            self.just_applied = false;
+            return;
+        }
 
         if self.remaining > 0 {
             self.remaining -= 1;

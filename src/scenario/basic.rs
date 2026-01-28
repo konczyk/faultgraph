@@ -3,6 +3,7 @@ use crate::graph::edge::{Edge, EdgeId};
 use crate::graph::graph::Graph;
 use crate::graph::node::{Node, NodeId};
 use crate::scenario::scenario::Scenario;
+use crate::simulation::modifiers::CapacityModifier;
 use crate::state::edge_state::EdgeState;
 use crate::state::node_state::NodeState;
 use crate::state::snapshot::Snapshot;
@@ -17,34 +18,71 @@ pub struct BasicScenario {
 impl BasicScenario {
     pub fn build() -> (Graph, GroupSet, Snapshot, Box<dyn Scenario>) {
         let nodes = vec![
-            Node::new(NodeId(0), "api-gateway".into(), 120.0, 1.0),
-            Node::new(NodeId(1), "auth-service".into(), 80.0, 1.0),
-            Node::new(NodeId(2), "orders-service".into(), 90.0, 1.1),
-            Node::new(NodeId(3), "payments-service".into(), 70.0, 1.2),
-            Node::new(NodeId(4), "redis-cache".into(), 60.0, 1.4),
-            Node::new(NodeId(5), "postgres-primary".into(), 100.0, 0.7),
-            Node::new(NodeId(6), "postgres-replica".into(), 100.0, 0.5),
+            Node::new(NodeId(0), "api-1".into(), 200.0, 1.8),
+            Node::new(NodeId(1), "api-2".into(), 200.0, 1.6),
+            Node::new(NodeId(2), "auth".into(), 80.0, 1.0),
+            Node::new(NodeId(3), "orders-1".into(), 100.0, 1.2),
+            Node::new(NodeId(4), "orders-2".into(), 100.0, 1.2),
+            Node::new(NodeId(5), "cache-1".into(), 300.0, 0.7),
+            Node::new(NodeId(6), "cache-2".into(), 300.0, 0.7),
+            Node::new(NodeId(7), "cache-3".into(), 300.0, 0.7),
+            Node::new(NodeId(8), "cache-4".into(), 300.0, 0.7),
+            Node::new(NodeId(9), "db-1".into(), 60.0, 0.0),
+            Node::new(NodeId(10), "db-2".into(), 60.0, 0.0),
+            Node::new(NodeId(11), "db-3".into(), 60.0, 0.0),
         ];
 
-        let edges = vec![
-            Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0),
-            Edge::new(EdgeId(1), NodeId(0), NodeId(2), 1.0),
-            Edge::new(EdgeId(2), NodeId(2), NodeId(3), 2.0),
-            Edge::new(EdgeId(3), NodeId(1), NodeId(4), 1.2),
-            Edge::new(EdgeId(4), NodeId(2), NodeId(5), 1.4),
-            Edge::new(EdgeId(5), NodeId(5), NodeId(6), 0.6),
-        ];
+        let mut edges = Vec::new();
+        let mut eid = 0;
+
+        for api in [0, 1] {
+            edges.push(Edge::new(EdgeId(eid), NodeId(api), NodeId(2), 1.0));
+            eid += 1;
+        }
+
+        for api in [0, 1] {
+            for orders in [3, 4] {
+                edges.push(Edge::new(EdgeId(eid), NodeId(api), NodeId(orders), 1.0));
+                eid += 1;
+            }
+        }
+
+        for api in [0, 1] {
+            for cache in [5, 6, 7, 8] {
+                edges.push(Edge::new(EdgeId(eid), NodeId(api), NodeId(cache), 4.0));
+                eid += 1;
+            }
+        }
+
+        for cache in [5, 6, 7, 8] {
+            edges.push(Edge::new(EdgeId(eid), NodeId(cache), NodeId(9), 1.0));
+            eid += 1;
+            edges.push(Edge::new(EdgeId(eid), NodeId(cache), NodeId(10), 1.0));
+            eid += 1;
+            edges.push(Edge::new(EdgeId(eid), NodeId(cache), NodeId(11), 0.8));
+            eid += 1;
+        }
+
+        for orders in [3, 4] {
+            edges.push(Edge::new(EdgeId(eid), NodeId(orders), NodeId(9), 1.0));
+            eid += 1;
+            edges.push(Edge::new(EdgeId(eid), NodeId(orders), NodeId(10), 1.0));
+            eid += 1;
+            edges.push(Edge::new(EdgeId(eid), NodeId(orders), NodeId(11), 1.0));
+            eid += 1;
+        }
 
         let graph = Graph::new(nodes, edges);
 
         let groups = GroupSet::new(vec![
-            Group::new("Ingress".into(), vec![NodeId(0)]),
+            Group::new("Ingress".into(), vec![NodeId(0), NodeId(1)]),
+            Group::new("Auth".into(), vec![NodeId(2)]),
+            Group::new("Orders".into(), vec![NodeId(3), NodeId(4)]),
             Group::new(
-                "Core Services".into(),
-                vec![NodeId(1), NodeId(2), NodeId(3)],
+                "Cache".into(),
+                vec![NodeId(5), NodeId(6), NodeId(7), NodeId(8)],
             ),
-            Group::new("Cache".into(), vec![NodeId(4)]),
-            Group::new("Database".into(), vec![NodeId(5), NodeId(6)]),
+            Group::new("Database".into(), vec![NodeId(9), NodeId(10), NodeId(11)]),
         ]);
 
         let node_states = graph
@@ -55,13 +93,19 @@ impl BasicScenario {
 
         let edge_states = graph.edges().iter().map(|_| EdgeState::new(true)).collect();
 
-        let snapshot = Snapshot::new(0, node_states, edge_states);
+        let capacity_mods = groups
+            .groups()
+            .iter()
+            .map(|_| CapacityModifier::new())
+            .collect();
+
+        let snapshot = Snapshot::new(0, node_states, edge_states, capacity_mods);
 
         let scenario = BasicScenario {
-            entry: vec![NodeId(0)],
-            base_load: 15.0,
-            ramp_per_turn: 3.0,
-            max_load: 250.0,
+            entry: vec![NodeId(0), NodeId(1)],
+            base_load: 20.0,
+            ramp_per_turn: 5.0,
+            max_load: 400.0,
         };
 
         (graph, groups, snapshot, Box::new(scenario))

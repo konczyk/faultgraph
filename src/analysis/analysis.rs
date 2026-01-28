@@ -2,21 +2,25 @@ use crate::analysis::groups::{Group, GroupHealth, GroupSet, GroupSummary, GroupT
 use crate::graph::graph::Graph;
 use crate::state::snapshot::Snapshot;
 
-fn calc_util(snapshot: &Snapshot, group: &Group, graph: &Graph) -> f64 {
-    let states = snapshot.node_states();
-    let (agg_util, cnt) = group
+fn calc_util(snapshot: &Snapshot, group: &Group, graph: &Graph, group_id: usize) -> f64 {
+    let node_states = snapshot.node_states();
+    let (agg_served, agg_capacity) = group
         .nodes()
         .iter()
         .map(|id| {
-            let capacity = graph.node_by_id(*id).capacity();
-            if capacity > 0.0 {
-                states[id.index()].served() / capacity
-            } else {
-                0.0
-            }
+            let capacity_mod = snapshot.capacity_mod(group_id);
+            let capacity = graph.node_by_id(*id).capacity() * capacity_mod.factor();
+            let served = node_states[id.index()].served();
+            (served, capacity)
         })
-        .fold((0.0, 0), |(sum, cnt), u| (sum + u, cnt + 1));
-    if cnt > 0 { agg_util / cnt as f64 } else { 0.0 }
+        .fold((0.0, 0.0), |(sum_util, sum_cap), (u, c)| {
+            (sum_util + u, sum_cap + c)
+        });
+    if agg_capacity > 0.0 {
+        agg_served / agg_capacity
+    } else {
+        0.0
+    }
 }
 
 fn calc_health(snapshot: &Snapshot, group: &Group) -> f64 {
@@ -44,9 +48,10 @@ pub fn aggregate_groups(
     group_set
         .groups()
         .iter()
-        .map(|g| {
-            let prev_avg_util = calc_util(&previous_snapshot, &g, &graph);
-            let curr_avg_util = calc_util(&current_snapshot, &g, &graph);
+        .enumerate()
+        .map(|(g_id, g)| {
+            let prev_avg_util = calc_util(&previous_snapshot, &g, &graph, g_id);
+            let curr_avg_util = calc_util(&current_snapshot, &g, &graph, g_id);
             let util_diff = curr_avg_util - prev_avg_util;
 
             let avg_util_trend = if util_diff > epsilon {
@@ -102,6 +107,7 @@ mod tests {
     use super::*;
     use crate::graph::edge::{Edge, EdgeId};
     use crate::graph::node::{Node, NodeId};
+    use crate::simulation::modifiers::CapacityModifier;
     use crate::state::edge_state::EdgeState;
     use crate::state::node_state::NodeState;
     use approx::assert_relative_eq;
@@ -131,6 +137,7 @@ mod tests {
                 NodeState::new(0.0, 40.0, 0.0, 0.6),
             ],
             vec![EdgeState::new(true), EdgeState::new(true)],
+            vec![CapacityModifier::new(); 2],
         );
 
         let current_snapshot = Snapshot::new(
@@ -142,16 +149,17 @@ mod tests {
                 NodeState::new(0.0, 90.0, 0.0, 0.8),
             ],
             vec![EdgeState::new(true), EdgeState::new(true)],
+            vec![CapacityModifier::new(); 2],
         );
 
         let summaries = aggregate_groups(&groupset, &current_snapshot, &previous_snapshot, &graph);
 
         assert_relative_eq!(
-            (10.0 / 100.0 + 50.0 / 60.0) / 2.0,
+            (10.0 + 50.0) / (100.0 + 60.0),
             summaries[0].avg_utilization()
         );
         assert_relative_eq!(
-            (30.0 / 80.0 + 90.0 / 10.0) / 2.0,
+            (30.0 + 90.0) / (80.0 + 10.0),
             summaries[1].avg_utilization()
         );
     }
@@ -194,6 +202,7 @@ mod tests {
                 EdgeState::new(true),
                 EdgeState::new(true),
             ],
+            vec![CapacityModifier::new(); 3],
         );
 
         let current_snapshot = Snapshot::new(
@@ -211,6 +220,7 @@ mod tests {
                 EdgeState::new(true),
                 EdgeState::new(true),
             ],
+            vec![CapacityModifier::new(); 3],
         );
 
         let summaries = aggregate_groups(&groupset, &current_snapshot, &previous_snapshot, &graph);
@@ -271,6 +281,7 @@ mod tests {
                 EdgeState::new(true),
                 EdgeState::new(true),
             ],
+            vec![CapacityModifier::new(); 4],
         );
 
         let current_snapshot = Snapshot::new(
@@ -291,6 +302,7 @@ mod tests {
                 EdgeState::new(true),
                 EdgeState::new(true),
             ],
+            vec![CapacityModifier::new(); 4],
         );
 
         let summaries = aggregate_groups(&groupset, &current_snapshot, &previous_snapshot, &graph);

@@ -1,9 +1,7 @@
 use crate::analysis::groups::GroupSet;
-use crate::graph::edge::EdgeId;
 use crate::graph::graph::Graph;
 use crate::graph::node::NodeId;
 use crate::scenario::scenario::Scenario;
-use crate::simulation::modifiers::CapacityModifier;
 use crate::state::snapshot::Snapshot;
 use std::mem;
 
@@ -14,7 +12,6 @@ pub struct SimulationEngine {
     current_snapshot: Snapshot,
     scenario: Box<dyn Scenario>,
     remaining_ops: u8,
-    capacity_mods: Vec<CapacityModifier>,
     node_to_group: Vec<usize>,
 }
 
@@ -26,7 +23,6 @@ impl SimulationEngine {
         scenario: Box<dyn Scenario>,
     ) -> Self {
         let remaining_ops = scenario.ops_per_turn();
-        let groups_cnt = groups.groups().len();
         let node_to_group = graph
             .nodes()
             .iter()
@@ -53,7 +49,6 @@ impl SimulationEngine {
             current_snapshot: initial_snapshot,
             scenario,
             remaining_ops,
-            capacity_mods: vec![CapacityModifier::new(); groups_cnt],
             node_to_group,
         }
     }
@@ -79,6 +74,7 @@ impl SimulationEngine {
     }
 
     pub fn step(&mut self) {
+        self.current_snapshot.tick();
         let node_states = self.current_snapshot.node_states();
         let edge_states = self.current_snapshot.edge_states();
         let mut prop = vec![0.0; self.graph.node_count()];
@@ -128,7 +124,7 @@ impl SimulationEngine {
                 return;
             }
 
-            let throttle = self.capacity_mods[self.node_to_group[i]].factor();
+            let throttle = self.current_snapshot.capacity_mods()[self.node_to_group[i]].factor();
             let capacity = self.graph.node_by_id(NodeId(i)).capacity() * throttle;
             let outgoing_edges = self.graph.outgoing(NodeId(i));
             let total = prop[i] + n.backlog();
@@ -159,16 +155,15 @@ impl SimulationEngine {
 
         let turn = self.current_snapshot.turn() + 1;
         let new_edge_states = edge_states.clone();
+        let new_capacity_mods = self.current_snapshot.capacity_mods().clone();
 
         let old_snapshot = mem::replace(
             &mut self.current_snapshot,
-            Snapshot::new(turn, new_node_states, new_edge_states),
+            Snapshot::new(turn, new_node_states, new_edge_states, new_capacity_mods),
         );
 
         self.previous_snapshot = Some(old_snapshot);
-
         self.remaining_ops = self.scenario.ops_per_turn();
-        self.capacity_mods.iter_mut().for_each(|t| t.tick());
     }
 
     pub fn current_snapshot(&self) -> &Snapshot {
@@ -182,7 +177,7 @@ impl SimulationEngine {
     }
 
     fn try_capacity_modifier(&mut self, group_id: usize, factor: f64) {
-        if self.remaining_ops > 0 && self.capacity_mods[group_id].apply(factor) {
+        if self.remaining_ops > 0 && self.current_snapshot.update_capacity(group_id, factor) {
             self.remaining_ops -= 1;
         }
     }
@@ -194,18 +189,15 @@ impl SimulationEngine {
     pub fn try_boost_group(&mut self, group_id: usize) {
         self.try_capacity_modifier(group_id, 1.5);
     }
-
-    pub fn capacity_modifier(&self, group_id: usize) -> &CapacityModifier {
-        &self.capacity_mods[group_id]
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::analysis::groups::Group;
-    use crate::graph::edge::Edge;
+    use crate::graph::edge::{Edge, EdgeId};
     use crate::graph::node::Node;
+    use crate::simulation::modifiers::CapacityModifier;
     use crate::state::edge_state::EdgeState;
     use crate::state::node_state::NodeState;
     use approx::assert_relative_eq;
@@ -239,7 +231,7 @@ mod tests {
         }
     }
 
-    fn snapshot(graph: &Graph) -> Snapshot {
+    fn snapshot(graph: &Graph, group_cnt: usize) -> Snapshot {
         Snapshot::new(
             0,
             graph
@@ -248,6 +240,7 @@ mod tests {
                 .map(|_| NodeState::new(0.0, 0.0, 0.0, 1.0))
                 .collect(),
             graph.edges().iter().map(|_| EdgeState::new(true)).collect(),
+            vec![CapacityModifier::new(); group_cnt],
         )
     }
 
@@ -258,7 +251,7 @@ mod tests {
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
-        let initial_snapshot = snapshot(&graph);
+        let initial_snapshot = snapshot(&graph, 1);
         let groups = GroupSet::new(vec![Group::new(
             "group1".to_string(),
             vec![NodeId(0), NodeId(1)],
@@ -313,7 +306,7 @@ mod tests {
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
-        let initial_snapshot = snapshot(&graph);
+        let initial_snapshot = snapshot(&graph, 1);
         let groups = GroupSet::new(vec![Group::new(
             "group1".to_string(),
             vec![NodeId(0), NodeId(1)],
@@ -352,6 +345,7 @@ mod tests {
                 .iter()
                 .map(|_| EdgeState::new(false))
                 .collect(),
+            vec![CapacityModifier::new(); 1],
         );
         let groups = GroupSet::new(vec![Group::new(
             "group1".to_string(),
@@ -393,6 +387,7 @@ mod tests {
                 .map(|(i, _)| NodeState::new(0.0, 0.0, 0.0, if i == 0 { 0.0 } else { 1.0 }))
                 .collect(),
             graph.edges().iter().map(|_| EdgeState::new(true)).collect(),
+            vec![CapacityModifier::new(); 1],
         );
         let groups = GroupSet::new(vec![Group::new(
             "group1".to_string(),
@@ -448,7 +443,7 @@ mod tests {
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
-        let initial_snapshot = snapshot(&graph);
+        let initial_snapshot = snapshot(&graph, 1);
         let groups = GroupSet::new(vec![Group::new(
             "group1".to_string(),
             vec![NodeId(0), NodeId(1)],
@@ -503,7 +498,7 @@ mod tests {
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
-        let initial_snapshot = snapshot(&graph);
+        let initial_snapshot = snapshot(&graph, 1);
         let groups = GroupSet::new(vec![Group::new(
             "group1".to_string(),
             vec![NodeId(0), NodeId(1)],
@@ -570,7 +565,7 @@ mod tests {
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
-        let initial_snapshot = snapshot(&graph);
+        let initial_snapshot = snapshot(&graph, 2);
         let groups = GroupSet::new(vec![
             Group::new("group1".to_string(), vec![NodeId(0)]),
             Group::new("group2".to_string(), vec![NodeId(1)]),
@@ -626,7 +621,7 @@ mod tests {
         let link = Edge::new(EdgeId(0), NodeId(0), NodeId(1), 1.0);
 
         let graph = Graph::new(vec![api, db], vec![link]);
-        let initial_snapshot = snapshot(&graph);
+        let initial_snapshot = snapshot(&graph, 2);
         let groups = GroupSet::new(vec![
             Group::new("group1".to_string(), vec![NodeId(0)]),
             Group::new("group2".to_string(), vec![NodeId(1)]),
@@ -710,6 +705,7 @@ mod tests {
                 .enumerate()
                 .map(|(i, _)| EdgeState::new(i != 2))
                 .collect(),
+            vec![CapacityModifier::new(); 2],
         );
         let groups = GroupSet::new(vec![
             Group::new("group1".to_string(), vec![NodeId(0), NodeId(1)]),
