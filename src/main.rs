@@ -1,7 +1,9 @@
 use crate::scenario::basic::BasicScenario;
+use crate::scenario::stress::StressScenario;
 use crate::simulation::engine::SimulationEngine;
 use crate::tui::app::App;
 use crate::tui::draw::draw_app;
+use clap::{Parser, ValueEnum};
 use crossterm::event::KeyCode::{Down, Up};
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use std::io;
@@ -14,9 +16,26 @@ mod simulation;
 mod state;
 mod tui;
 
+#[derive(Clone, Debug, ValueEnum)]
+#[value(rename_all = "lowercase")]
+enum ScenarioKind {
+    Basic,
+    Stress,
+}
+
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(long, short, value_enum, default_value_t = ScenarioKind::Basic)]
+    scenario: ScenarioKind,
+}
+
 fn main() -> io::Result<()> {
+    let args = Args::parse();
     let mut terminal = ratatui::init();
-    let (graph, groups, initial_snapshot, scenario) = BasicScenario::build();
+    let (graph, groups, initial_snapshot, scenario) = match args.scenario {
+        ScenarioKind::Basic => BasicScenario::build(),
+        ScenarioKind::Stress => StressScenario::build(),
+    };
     let engine = SimulationEngine::new(graph, groups, initial_snapshot, scenario);
 
     let mut app = App::new(engine);
