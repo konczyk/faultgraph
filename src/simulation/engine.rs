@@ -60,29 +60,13 @@ impl SimulationEngine {
             .map(|(n_id, _)| self.graph.node_by_id(NodeId(n_id)))
             .filter(|n| node_states[n.id().index()].is_healthy())
             .for_each(|n| {
-                let edges = self.graph.outgoing(*n.id());
-                let total_weight = edges
+                self.graph
+                    .outgoing(*n.id())
                     .iter()
-                    .filter(|e_id| edge_states[e_id.index()].is_enabled())
-                    .map(|e_id| self.graph.edge_by_id(*e_id).weight())
-                    .sum::<f64>();
-
-                if total_weight == 0.0 {
-                    return;
-                }
-
-                edges
-                    .iter()
-                    .filter(|e_id| edge_states[e_id.index()].is_enabled())
                     .map(|e_id| self.graph.edge_by_id(*e_id))
                     .for_each(|e| {
-                        let f_id = n.id().index();
                         let t_id = e.to().index();
-                        let served = node_states[f_id].served();
-                        if served > 0.0 {
-                            let total_demand = served * n.gain();
-                            prop[t_id] += total_demand * (e.weight() / total_weight);
-                        }
+                        prop[t_id] += self.current_snapshot.edge_load(e.id(), self.graph());
                     })
             });
 
