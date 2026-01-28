@@ -49,7 +49,7 @@ impl NodeState {
     }
 
     pub fn set_health(&mut self, health: f64) {
-        self.health = health.clamp(0.0, 0.1)
+        self.health = health.clamp(0.0, 1.0)
     }
 
     pub fn is_healthy(&self) -> bool {

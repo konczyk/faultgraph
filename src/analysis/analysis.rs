@@ -4,11 +4,12 @@ use crate::state::snapshot::Snapshot;
 
 fn calc_util(snapshot: &Snapshot, group: &Group, graph: &Graph, group_id: usize) -> f64 {
     let node_states = snapshot.node_states();
+    let capacity_mod = snapshot.capacity_mod(group_id);
     let (agg_served, agg_capacity) = group
         .nodes()
         .iter()
+        .filter(|n_id| node_states[n_id.index()].is_healthy())
         .map(|id| {
-            let capacity_mod = snapshot.capacity_mod(group_id);
             let capacity = graph.node_by_id(*id).capacity() * capacity_mod.factor();
             let served = node_states[id.index()].served();
             (served, capacity)

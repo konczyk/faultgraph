@@ -232,10 +232,10 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
 }
 
 fn build_node_table(app: &'_ App) -> Table<'_> {
-    let states = app.engine.current_snapshot().node_states();
+    let node_states = app.engine.current_snapshot().node_states();
     let graph = app.engine.graph();
 
-    let mut rows = states
+    let mut rows = node_states
         .iter()
         .enumerate()
         .map(|(i, state)| {
@@ -255,13 +255,13 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
     Table::new(
         rows.iter().map(|(i, utilization)| {
             let node = graph.node_by_id(NodeId(*i));
-            let state = &states[*i];
+            let state = &node_states[*i];
 
             Row::new(vec![
                 Cell::from(i.to_string()),
                 Cell::from(node.name()),
                 Cell::from(format!("{:>7.1}", utilization * 100.0)),
-                Cell::from(format!("{:>8.1}", state.served())),
+                Cell::from(format!("{:>8.1}", state.demand())),
                 Cell::from(format!("{:>6.1}", node.capacity())),
                 Cell::from(format!("{:>6.1}", state.health() * 100.0)),
                 Cell::from(mods(app, app.engine.group_by_node_id(*i))),
