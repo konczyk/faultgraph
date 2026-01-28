@@ -22,15 +22,30 @@ impl Group {
 
 pub struct GroupSet {
     groups: Vec<Group>,
+    node_to_group: Vec<usize>,
 }
 
 impl GroupSet {
     pub fn new(groups: Vec<Group>) -> Self {
-        Self { groups }
+        let nodes_cnt = groups.iter().map(|g| g.nodes.len()).sum::<usize>();
+        let mut node_to_group = vec![0; nodes_cnt];
+        groups.iter().enumerate().for_each(|(g_id, group)| {
+            group.nodes().iter().for_each(|n_id| {
+                node_to_group[n_id.index()] = g_id;
+            })
+        });
+        Self {
+            groups,
+            node_to_group,
+        }
     }
 
     pub fn groups(&self) -> &[Group] {
         &self.groups
+    }
+
+    pub fn group_by_node_id(&self, node_id: usize) -> usize {
+        self.node_to_group[node_id]
     }
 }
 

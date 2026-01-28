@@ -82,7 +82,7 @@ fn build_indicators(app: &'_ App) -> Paragraph<'_> {
             let capacity_mod = app
                 .engine
                 .current_snapshot()
-                .capacity_mod(app.engine.group_by_node_id(i));
+                .capacity_mod(app.engine.groups().group_by_node_id(i));
             s.served() / (nodes[i].capacity() * capacity_mod.factor())
         })
         .fold((0.0, 0), |acc, u| (acc.0 + u, acc.1 + 1));
@@ -251,7 +251,10 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
         .enumerate()
         .map(|(i, state)| {
             let node = graph.node_by_id(NodeId(i));
-            let capacity_mod = app.engine.current_snapshot().capacity_mod(app.engine.group_by_node_id(i));
+            let capacity_mod = app
+                .engine
+                .current_snapshot()
+                .capacity_mod(app.engine.groups().group_by_node_id(i));
             let capacity = node.capacity() * capacity_mod.factor();
             (
                 i,
@@ -277,7 +280,7 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
                 Cell::from(format!("{:>8.1}", state.demand())),
                 Cell::from(format!("{:>6.1}", node.capacity())),
                 Cell::from(format!("{:>6.1}", state.health() * 100.0)),
-                Cell::from(mods(app, app.engine.group_by_node_id(*i))),
+                Cell::from(mods(app, app.engine.groups().group_by_node_id(*i))),
             ])
         }),
         [

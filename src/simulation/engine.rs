@@ -12,7 +12,6 @@ pub struct SimulationEngine {
     current_snapshot: Snapshot,
     scenario: Box<dyn Scenario>,
     remaining_ops: u8,
-    node_to_group: Vec<usize>,
 }
 
 impl SimulationEngine {
@@ -23,25 +22,6 @@ impl SimulationEngine {
         scenario: Box<dyn Scenario>,
     ) -> Self {
         let remaining_ops = scenario.ops_per_turn();
-        let node_to_group = graph
-            .nodes()
-            .iter()
-            .enumerate()
-            .map(|(n_id, _)| {
-                groups
-                    .groups()
-                    .iter()
-                    .enumerate()
-                    .find_map(|(g_id, group)| {
-                        group
-                            .nodes()
-                            .iter()
-                            .find(|n| n.index() == n_id)
-                            .map(|_| g_id)
-                    })
-                    .unwrap()
-            })
-            .collect();
         Self {
             graph,
             groups,
@@ -49,7 +29,6 @@ impl SimulationEngine {
             current_snapshot: initial_snapshot,
             scenario,
             remaining_ops,
-            node_to_group,
         }
     }
 
@@ -67,10 +46,6 @@ impl SimulationEngine {
 
     pub fn remaining_ops(&self) -> u8 {
         self.remaining_ops
-    }
-
-    pub fn group_by_node_id(&self, node_id: usize) -> usize {
-        self.node_to_group[node_id]
     }
 
     pub fn step(&mut self) {
@@ -124,7 +99,10 @@ impl SimulationEngine {
                 return;
             }
 
-            let throttle = self.current_snapshot.capacity_mods()[self.node_to_group[i]].factor();
+            let throttle = self
+                .current_snapshot
+                .capacity_mod(self.groups.group_by_node_id(i))
+                .factor();
             let capacity = self.graph.node_by_id(NodeId(i)).capacity() * throttle;
             let outgoing_edges = self.graph.outgoing(NodeId(i));
             let total = prop[i] + n.backlog();
