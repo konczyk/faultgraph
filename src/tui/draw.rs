@@ -61,6 +61,24 @@ fn build_turn(app: &'_ App) -> Paragraph<'_> {
 fn build_indicators(app: &'_ App) -> Paragraph<'_> {
     let nodes = app.engine.graph().nodes();
     let entry_nodes = app.engine.scenario().entry_nodes();
+    let node_states = app.engine.current_snapshot().node_states();
+    let sinks = app.engine.graph().sinks();
+    let (max_throughput, actual_throughput) = sinks
+        .iter()
+        .map(|n_id| {
+            (
+                node_states[n_id.index()].demand(),
+                node_states[n_id.index()].served(),
+            )
+        })
+        .fold((0.0, 0.0), |(acc_max, acc_act), (d, s)| {
+            (acc_max + d, acc_act + s)
+        });
+    let efficiency = if max_throughput > 0.0 {
+        actual_throughput / max_throughput
+    } else {
+        0.0
+    };
 
     let incoming_load = entry_nodes
         .iter()
@@ -117,6 +135,13 @@ fn build_indicators(app: &'_ App) -> Paragraph<'_> {
         Span::from(" | ").dim(),
         Span::from(" U ").bold(),
         Span::from(format!(" {}%  ", (avg_util * 100.0).round() as usize)),
+        Span::from(" | ").dim(),
+        Span::from(" E ").bold(),
+        if efficiency > 0.0 {
+            Span::from(format!(" {}%  ", (efficiency * 100.0).round() as usize))
+        } else {
+            Span::from(" -- ")
+        },
         Span::from(" | ").dim(),
         Span::from(" ♥ ").bold().style(health_style),
         Span::from(format!(" {}% ", (avg_health * 100.0).round() as usize)).style(health_style),
