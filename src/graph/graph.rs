@@ -5,7 +5,6 @@ pub struct Graph {
     nodes: Vec<Node>,
     edges: Vec<Edge>,
     adj: Vec<Vec<EdgeId>>,
-    sinks: Vec<NodeId>,
 }
 
 impl Graph {
@@ -14,17 +13,7 @@ impl Graph {
         edges.iter().for_each(|e| {
             adj[e.from().index()].push(e.id());
         });
-        let sinks = nodes
-            .iter()
-            .filter(|n| adj[n.id().index()].is_empty())
-            .map(|n| *n.id())
-            .collect::<Vec<NodeId>>();
-        Self {
-            nodes,
-            edges,
-            adj,
-            sinks,
-        }
+        Self { nodes, edges, adj }
     }
 
     pub fn nodes(&self) -> &[Node] {
@@ -49,9 +38,5 @@ impl Graph {
 
     pub fn node_count(&self) -> usize {
         self.nodes.len()
-    }
-
-    pub fn sinks(&self) -> &[NodeId] {
-        &self.sinks
     }
 }
