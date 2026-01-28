@@ -60,7 +60,6 @@ fn build_turn(app: &'_ App) -> Paragraph<'_> {
 
 fn build_indicators(app: &'_ App) -> Paragraph<'_> {
     let nodes = app.engine.graph().nodes();
-    let states = app.engine.current_snapshot().node_states();
     let entry_nodes = app.engine.scenario().entry_nodes();
 
     let incoming_load = entry_nodes
@@ -252,10 +251,12 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
         .enumerate()
         .map(|(i, state)| {
             let node = graph.node_by_id(NodeId(i));
+            let capacity_mod = app.engine.current_snapshot().capacity_mod(app.engine.group_by_node_id(i));
+            let capacity = node.capacity() * capacity_mod.factor();
             (
                 i,
-                if node.capacity() > 0.0 {
-                    state.served() / node.capacity()
+                if capacity > 0.0 {
+                    state.served() / capacity
                 } else {
                     0.0
                 },
