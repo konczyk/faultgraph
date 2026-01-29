@@ -22,37 +22,64 @@ impl StressScenario {
         let mut nid = 0usize;
         let mut eid = 0usize;
 
-        let api_cnt = 10;
-        let auth_cnt = 5;
-        let router_cnt = 5;
-        let cache_cnt = 40;
-        let orders_cnt = 20;
-        let worker_cnt = 30;
-        let db_cnt = 10;
+        let lb_cnt = 8;
+        let api_cnt = 40;
+        let auth_cnt = 20;
+        let router_cnt = 20;
+        let cache_cnt = 160;
+        let orders_cnt = 80;
+        let worker_cnt = 120;
+        let db_cnt = 40;
 
         let sizes = [40.0, 80.0, 160.0];
 
-        let mut make_nodes = |count: usize, prefix: &str, gain: f64| -> Vec<NodeId> {
-            (0..count)
-                .map(|i| {
-                    let cap = sizes[(nid + i) % sizes.len()];
-                    let id = NodeId(nid);
-                    nodes.push(Node::new(id, format!("{}-{}", prefix, nid), cap, gain));
-                    nid += 1;
-                    id
-                })
-                .collect()
+        fn make_nodes(
+            nodes: &mut Vec<Node>,
+            nid: &mut usize,
+            count: usize,
+            prefix: &str,
+            gain: f64,
+            sizes: &[f64],
+        ) -> Vec<NodeId> {
+            let mut ids = Vec::with_capacity(count);
+            for _ in 0..count {
+                let idx = *nid;
+                let cap = sizes[idx % sizes.len()];
+                let id = NodeId(idx);
+                nodes.push(Node::new(id, format!("{}-{}", prefix, idx), cap, gain));
+                ids.push(id);
+                *nid += 1;
+            }
+            ids
+        }
+
+        let lb_ids = {
+            let mut ids = Vec::new();
+            for _ in 0..lb_cnt {
+                let id = NodeId(nid);
+                nodes.push(Node::new(id, format!("lb-{}", nid), 400.0, 1.0));
+                ids.push(id);
+                nid += 1;
+            }
+            ids
         };
 
-        let api_ids = make_nodes(api_cnt, "api", 1.05);
-        let auth_ids = make_nodes(auth_cnt, "auth", 1.3);
-        let router_ids = make_nodes(router_cnt, "router", 1.0);
-        let cache_ids = make_nodes(cache_cnt, "cache", 0.7);
-        let orders_ids = make_nodes(orders_cnt, "orders", 1.4);
-        let worker_ids = make_nodes(worker_cnt, "worker", 1.6);
-        let db_ids = make_nodes(db_cnt, "db", 0.0);
+        let api_ids = make_nodes(&mut nodes, &mut nid, api_cnt, "api", 1.05, &sizes);
+        let auth_ids = make_nodes(&mut nodes, &mut nid, auth_cnt, "auth", 1.3, &sizes);
+        let router_ids = make_nodes(&mut nodes, &mut nid, router_cnt, "router", 1.0, &sizes);
+        let cache_ids = make_nodes(&mut nodes, &mut nid, cache_cnt, "cache", 0.7, &sizes);
+        let orders_ids = make_nodes(&mut nodes, &mut nid, orders_cnt, "orders", 1.4, &sizes);
+        let worker_ids = make_nodes(&mut nodes, &mut nid, worker_cnt, "worker", 1.6, &sizes);
+        let db_ids = make_nodes(&mut nodes, &mut nid, db_cnt, "db", 0.0, &sizes);
 
         let cap = |id: NodeId| nodes[id.index()].capacity();
+
+        for lb in &lb_ids {
+            for api in &api_ids {
+                edges.push(Edge::new(EdgeId(eid), *lb, *api, cap(*api)));
+                eid += 1;
+            }
+        }
 
         for api in &api_ids {
             for auth in &auth_ids {
@@ -63,7 +90,7 @@ impl StressScenario {
                 edges.push(Edge::new(EdgeId(eid), *api, *router, cap(*router)));
                 eid += 1;
             }
-            for cache in cache_ids.iter().take(6) {
+            for cache in &cache_ids {
                 edges.push(Edge::new(EdgeId(eid), *api, *cache, cap(*cache)));
                 eid += 1;
             }
@@ -74,14 +101,14 @@ impl StressScenario {
                 edges.push(Edge::new(EdgeId(eid), *router, *cache, cap(*cache)));
                 eid += 1;
             }
-            for orders in orders_ids.iter().take(6) {
+            for orders in &orders_ids {
                 edges.push(Edge::new(EdgeId(eid), *router, *orders, cap(*orders)));
                 eid += 1;
             }
         }
 
         for cache in &cache_ids {
-            for orders in orders_ids.iter().take(10) {
+            for orders in &orders_ids {
                 edges.push(Edge::new(EdgeId(eid), *cache, *orders, cap(*orders)));
                 eid += 1;
             }
@@ -93,7 +120,7 @@ impl StressScenario {
         }
 
         for orders in &orders_ids {
-            for worker in worker_ids.iter().take(8) {
+            for worker in &worker_ids {
                 edges.push(Edge::new(EdgeId(eid), *orders, *worker, cap(*worker)));
                 eid += 1;
             }
@@ -104,7 +131,7 @@ impl StressScenario {
         }
 
         for worker in &worker_ids {
-            for db in db_ids.iter().take(5) {
+            for db in &db_ids {
                 edges.push(Edge::new(EdgeId(eid), *worker, *db, cap(*db)));
                 eid += 1;
             }
@@ -113,6 +140,7 @@ impl StressScenario {
         let graph = Graph::new(nodes, edges);
 
         let groups = GroupSet::new(vec![
+            Group::new("LoadBalancers".into(), lb_ids.clone()),
             Group::new("Ingress".into(), api_ids.clone()),
             Group::new("Auth".into(), auth_ids),
             Group::new("Routers".into(), router_ids),
@@ -139,10 +167,10 @@ impl StressScenario {
         let snapshot = Snapshot::new(0, node_states, edge_states, capacity_mods);
 
         let scenario = StressScenario {
-            entry: api_ids,
-            base_load: 50.0,
-            ramp_per_turn: 8.0,
-            max_load: 2000.0,
+            entry: lb_ids,
+            base_load: 200.0,
+            ramp_per_turn: 25.0,
+            max_load: 6000.0,
         };
 
         (graph, groups, snapshot, Box::new(scenario))
@@ -153,9 +181,9 @@ impl Scenario for StressScenario {
     fn load(&self, node_id: NodeId, turn: usize) -> f64 {
         if self.entry.contains(&node_id) {
             let spike = if turn % 17 == 0 {
-                1.4
+                2.0
             } else if turn % 11 == 0 {
-                0.7
+                0.8
             } else {
                 1.0
             };

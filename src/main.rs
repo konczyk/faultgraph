@@ -1,4 +1,5 @@
 use crate::scenario::basic::BasicScenario;
+use crate::scenario::random::RandomStressScenario;
 use crate::scenario::stress::StressScenario;
 use crate::simulation::engine::SimulationEngine;
 use crate::tui::app::App;
@@ -20,6 +21,7 @@ mod tui;
 #[value(rename_all = "lowercase")]
 enum ScenarioKind {
     Basic,
+    Random,
     Stress,
 }
 
@@ -34,6 +36,7 @@ fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
     let (graph, groups, initial_snapshot, scenario) = match args.scenario {
         ScenarioKind::Basic => BasicScenario::build(),
+        ScenarioKind::Random => RandomStressScenario::build(12345),
         ScenarioKind::Stress => StressScenario::build(),
     };
     let engine = SimulationEngine::new(graph, groups, initial_snapshot, scenario);
