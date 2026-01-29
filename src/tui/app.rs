@@ -20,6 +20,11 @@ impl App {
     }
 
     pub fn refresh_groups(&mut self) {
+        let group_id = if self.aggregations.is_empty() {
+            0
+        } else {
+            self.selected_group_id()
+        };
         self.aggregations = aggregate_groups(
             self.engine.groups(),
             self.engine.current_snapshot(),
@@ -32,6 +37,14 @@ impl App {
 
         self.aggregations
             .sort_by(|a, b| a.1.raw_health().partial_cmp(&b.1.raw_health()).unwrap());
+
+        self.selected_index = self
+            .aggregations
+            .iter()
+            .enumerate()
+            .find(|(_, (g_id, _))| *g_id == group_id)
+            .map(|(pos, _)| pos)
+            .unwrap_or(self.selected_index)
     }
 
     pub fn select_next_group(&mut self) {
