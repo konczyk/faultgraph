@@ -1,12 +1,20 @@
 use crate::analysis::groups::{GroupHealth, GroupTrend};
-use crate::graph::node::NodeId;
+use crate::graph::node::{Node, NodeId};
+use crate::state::node_state::NodeState;
 use crate::tui::app::App;
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout};
+use ratatui::layout::{Constraint, Layout, Margin};
 use ratatui::style::Color::{Black, Gray, LightGreen, White};
 use ratatui::style::{Color, Style, Stylize};
-use ratatui::text::{Line, Span};
+use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Cell, Padding, Paragraph, Row, Table};
+
+fn find_pressure(app: &App) -> Vec<f64> {
+    app.aggregations
+        .iter()
+        .find(|(i, _)| *i == app.selected_group_id())
+        .map_or(vec![], |(_, s)| s.pressure().to_vec())
+}
 
 pub fn draw_app(frame: &mut Frame, app: &App) {
     let main = Layout::vertical([
@@ -33,11 +41,31 @@ pub fn draw_app(frame: &mut Frame, app: &App) {
     ])
     .split(main[2]);
 
+    let groups = Layout::vertical([
+        Constraint::Length((app.engine.groups().groups().len() + 3) as u16),
+        Constraint::Fill(1),
+    ])
+    .split(body[0]);
+
+    let pressure = find_pressure(app);
+    let non_zero = pressure.iter().filter(|p| **p > 0.0).count();
+
+    let details = Layout::vertical([
+        Constraint::Length(7),
+        Constraint::Length((non_zero + 2).min(4).clamp(3, 6) as u16),
+        Constraint::Fill(1),
+    ])
+    .split(groups[1].inner(Margin::new(2, 0)));
+
     frame.render_widget(build_title(app), topbar[0]);
     frame.render_widget(build_turn(app), topbar[1]);
     frame.render_widget(build_indicators(app), topbar[2]);
 
-    frame.render_widget(build_group_table(app), body[0]);
+    frame.render_widget(build_group_table(app), groups[0]);
+    frame.render_widget(build_details_block(app), groups[1]);
+    frame.render_widget(build_details_stats(app), details[0]);
+    frame.render_widget(build_details_pressure(app), details[1]);
+    frame.render_widget(build_details_most_pressured(app), details[2]);
     frame.render_widget(build_node_table(app), body[2]);
 
     frame.render_widget(build_status(app), main[4]);
@@ -240,6 +268,177 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
             .title(" Groups ".bold())
             .padding(Padding::horizontal(1)),
     )
+}
+
+fn build_details_block(_app: &'_ App) -> Block<'_> {
+    Block::bordered().title(" Details ".bold())
+}
+
+fn build_details_stats(app: &'_ App) -> Paragraph<'_> {
+    let group_id = app.selected_group_id();
+    let group = &app.engine.groups().groups()[group_id];
+    let nodes = group.nodes().iter().count();
+    let healthy = group
+        .nodes()
+        .iter()
+        .filter(|n| app.engine.current_snapshot().node_states()[n.index()].is_healthy())
+        .count();
+    let aggregations = &app.aggregations[group_id].1;
+
+    let mods = app
+        .engine
+        .current_snapshot()
+        .capacity_mods()
+        .iter()
+        .filter(|m| m.is_active())
+        .map(|m| {
+            let name = if m.factor() < 1.0 {
+                "Throttle"
+            } else {
+                "Boost"
+            };
+            Span::from(format!(
+                "Mods: {name} x{:.1} ({}t left) ",
+                m.factor(),
+                m.remaining_turns()
+            ))
+        })
+        .collect::<Vec<Span>>();
+
+    let text: Text = vec![
+        "".into(),
+        "".into(),
+        format!("Group: {}", group.name()).into(),
+        "".into(),
+        format!("Nodes: {} / {}", healthy, nodes).into(),
+        format!(
+            "Avg Util: {}%",
+            (aggregations.avg_utilization() * 100.0).round() as usize
+        )
+        .into(),
+        format!(
+            "Health: {}%",
+            (aggregations.raw_health() * 100.0).round() as usize
+        )
+        .into(),
+        if mods.len() > 0 {
+            Line::from(mods)
+        } else {
+            "Mods: None".into()
+        },
+        "".into(),
+        "Incoming Pressure (this turn)".into(),
+    ]
+    .into();
+    Paragraph::new(text)
+}
+
+fn build_details_pressure(app: &'_ App) -> Paragraph<'_> {
+    let mut lines: Vec<Line> = vec!["".into(), "Incoming Pressure (this turn)".into()];
+    let pressure = find_pressure(app);
+    let mut non_zero = pressure
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| **p > 0.0)
+        .map(|(i, p)| {
+            (
+                if i == app.selected_group_id() {
+                    "Internal"
+                } else {
+                    app.aggregations
+                        .iter()
+                        .find(|(g_id, _)| i == *g_id)
+                        .map_or("", |(_, s)| s.name())
+                },
+                i,
+                *p,
+            )
+        })
+        .collect::<Vec<(&str, usize, f64)>>();
+    if non_zero.is_empty() {
+        lines.push("None".into())
+    } else {
+        let total_pressure = non_zero.iter().map(|(_, _, p)| p).sum::<f64>();
+
+        non_zero.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+        let mut top = non_zero[0..non_zero.len().min(3)].to_vec();
+        let top_contains_internal = top
+            .iter()
+            .find(|(_, group_id, _)| *group_id == app.selected_group_id())
+            .is_some();
+        let internal = non_zero
+            .iter()
+            .find(|(_, group_id, p)| *group_id == app.selected_group_id() && *p > 0.0);
+
+        if top.len() == 3 && non_zero.len() > 3 && !top_contains_internal && internal.is_some() {
+            top.push(*internal.unwrap());
+        }
+
+        for (name, _, p) in &top {
+            lines.push(Line::from(vec![
+                {
+                    let filled = (((p / total_pressure) * 16.0).round() as usize).min(16);
+                    Span::from(format!(
+                        "[{}{}]",
+                        "#".repeat(filled),
+                        "-".repeat(16 - filled)
+                    ))
+                },
+                Span::from(format!(" {:<20}", name)),
+                Span::from(format!(
+                    " {:>3}%",
+                    ((p / total_pressure) * 100.0).round() as usize
+                )),
+            ]));
+        }
+    }
+
+    Paragraph::new(Text::from(lines))
+}
+
+fn build_details_most_pressured(app: &'_ App) -> Paragraph<'_> {
+    let mut lines: Vec<Line> = vec!["".into(), "Most Pressured Nodes".into()];
+    let mut most_pressured = app.engine.groups().groups()[app.selected_group_id()]
+        .nodes()
+        .iter()
+        .map(|n_id| {
+            (
+                app.engine.graph().node_by_id(*n_id),
+                &app.engine.current_snapshot().node_states()[n_id.index()],
+            )
+        })
+        .filter(|(_, state)| state.is_healthy())
+        .collect::<Vec<(&Node, &NodeState)>>();
+
+    if most_pressured.is_empty() {
+        lines.push("None".into())
+    } else {
+        let throttle = app
+            .engine
+            .current_snapshot()
+            .capacity_mod(app.selected_group_id())
+            .factor();
+        most_pressured.sort_by(|a, b| {
+            let pressure_a = (a.1.demand() + a.1.backlog()) / (a.0.capacity() * throttle);
+            let pressure_b = (b.1.demand() + b.1.backlog()) / (b.0.capacity() * throttle);
+            pressure_b.partial_cmp(&pressure_a).unwrap()
+        });
+        let top = most_pressured[0..most_pressured.len().min(3)].to_vec();
+        for (node, state) in &top {
+            let util = state.served() / (node.capacity() * throttle);
+            lines.push(Line::from(vec![
+                Span::from(format!("{:<20}", node.name())),
+                Span::from(format!("util: {:>3}%", (util * 100.0).round() as usize)),
+                Span::from(format!(
+                    "   backlog: {:>4}",
+                    state.backlog().round() as usize
+                ))
+                .dim(),
+            ]));
+        }
+    }
+
+    Paragraph::new(Text::from(lines))
 }
 
 fn build_node_table(app: &'_ App) -> Table<'_> {

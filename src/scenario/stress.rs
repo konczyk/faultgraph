@@ -19,8 +19,8 @@ impl StressScenario {
     pub fn build() -> (Graph, GroupSet, Snapshot, Box<dyn Scenario>) {
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
-        let mut eid = 0usize;
         let mut nid = 0usize;
+        let mut eid = 0usize;
 
         let api_cnt = 10;
         let auth_cnt = 5;
@@ -30,120 +30,82 @@ impl StressScenario {
         let worker_cnt = 30;
         let db_cnt = 10;
 
-        let api_ids = (0..api_cnt)
-            .map(|_| {
-                let id = NodeId(nid);
-                nodes.push(Node::new(id, format!("api-{}", nid), 120.0, 1.05));
-                nid += 1;
-                id
-            })
-            .collect::<Vec<_>>();
+        let sizes = [40.0, 80.0, 160.0];
 
-        let auth_ids = (0..auth_cnt)
-            .map(|_| {
-                let id = NodeId(nid);
-                nodes.push(Node::new(id, format!("auth-{}", nid), 60.0, 1.3));
-                nid += 1;
-                id
-            })
-            .collect::<Vec<_>>();
+        let mut make_nodes = |count: usize, prefix: &str, gain: f64| -> Vec<NodeId> {
+            (0..count)
+                .map(|i| {
+                    let cap = sizes[(nid + i) % sizes.len()];
+                    let id = NodeId(nid);
+                    nodes.push(Node::new(id, format!("{}-{}", prefix, nid), cap, gain));
+                    nid += 1;
+                    id
+                })
+                .collect()
+        };
 
-        let router_ids = (0..router_cnt)
-            .map(|_| {
-                let id = NodeId(nid);
-                nodes.push(Node::new(id, format!("router-{}", nid), 80.0, 1.0));
-                nid += 1;
-                id
-            })
-            .collect::<Vec<_>>();
+        let api_ids = make_nodes(api_cnt, "api", 1.05);
+        let auth_ids = make_nodes(auth_cnt, "auth", 1.3);
+        let router_ids = make_nodes(router_cnt, "router", 1.0);
+        let cache_ids = make_nodes(cache_cnt, "cache", 0.7);
+        let orders_ids = make_nodes(orders_cnt, "orders", 1.4);
+        let worker_ids = make_nodes(worker_cnt, "worker", 1.6);
+        let db_ids = make_nodes(db_cnt, "db", 0.0);
 
-        let cache_ids = (0..cache_cnt)
-            .map(|_| {
-                let id = NodeId(nid);
-                nodes.push(Node::new(id, format!("cache-{}", nid), 40.0, 0.7));
-                nid += 1;
-                id
-            })
-            .collect::<Vec<_>>();
-
-        let orders_ids = (0..orders_cnt)
-            .map(|_| {
-                let id = NodeId(nid);
-                nodes.push(Node::new(id, format!("orders-{}", nid), 50.0, 1.4));
-                nid += 1;
-                id
-            })
-            .collect::<Vec<_>>();
-
-        let worker_ids = (0..worker_cnt)
-            .map(|_| {
-                let id = NodeId(nid);
-                nodes.push(Node::new(id, format!("worker-{}", nid), 30.0, 1.6));
-                nid += 1;
-                id
-            })
-            .collect::<Vec<_>>();
-
-        let db_ids = (0..db_cnt)
-            .map(|_| {
-                let id = NodeId(nid);
-                nodes.push(Node::new(id, format!("db-{}", nid), 25.0, 0.0));
-                nid += 1;
-                id
-            })
-            .collect::<Vec<_>>();
+        let cap = |id: NodeId| nodes[id.index()].capacity();
 
         for api in &api_ids {
             for auth in &auth_ids {
-                edges.push(Edge::new(EdgeId(eid), *api, *auth, 0.8));
+                edges.push(Edge::new(EdgeId(eid), *api, *auth, cap(*auth)));
                 eid += 1;
             }
             for router in &router_ids {
-                edges.push(Edge::new(EdgeId(eid), *api, *router, 1.0));
+                edges.push(Edge::new(EdgeId(eid), *api, *router, cap(*router)));
                 eid += 1;
             }
-            for cache in cache_ids.iter().take(5) {
-                edges.push(Edge::new(EdgeId(eid), *api, *cache, 0.6));
+            for cache in cache_ids.iter().take(6) {
+                edges.push(Edge::new(EdgeId(eid), *api, *cache, cap(*cache)));
                 eid += 1;
             }
         }
 
         for router in &router_ids {
             for cache in &cache_ids {
-                edges.push(Edge::new(EdgeId(eid), *router, *cache, 1.2));
+                edges.push(Edge::new(EdgeId(eid), *router, *cache, cap(*cache)));
                 eid += 1;
             }
-            for orders in orders_ids.iter().take(5) {
-                edges.push(Edge::new(EdgeId(eid), *router, *orders, 0.9));
+            for orders in orders_ids.iter().take(6) {
+                edges.push(Edge::new(EdgeId(eid), *router, *orders, cap(*orders)));
                 eid += 1;
             }
         }
 
         for cache in &cache_ids {
             for orders in orders_ids.iter().take(10) {
-                edges.push(Edge::new(EdgeId(eid), *cache, *orders, 1.1));
-                eid += 1;
-            }
-            for api in api_ids.iter().take(2) {
-                edges.push(Edge::new(EdgeId(eid), *cache, *api, 0.15));
+                edges.push(Edge::new(EdgeId(eid), *cache, *orders, cap(*orders)));
                 eid += 1;
             }
         }
 
+        for window in cache_ids.windows(2) {
+            edges.push(Edge::new(EdgeId(eid), window[0], window[1], cap(window[1])));
+            eid += 1;
+        }
+
         for orders in &orders_ids {
             for worker in worker_ids.iter().take(8) {
-                edges.push(Edge::new(EdgeId(eid), *orders, *worker, 1.3));
+                edges.push(Edge::new(EdgeId(eid), *orders, *worker, cap(*worker)));
                 eid += 1;
             }
             for db in &db_ids {
-                edges.push(Edge::new(EdgeId(eid), *orders, *db, 0.8));
+                edges.push(Edge::new(EdgeId(eid), *orders, *db, cap(*db)));
                 eid += 1;
             }
         }
 
         for worker in &worker_ids {
             for db in db_ids.iter().take(5) {
-                edges.push(Edge::new(EdgeId(eid), *worker, *db, 1.0));
+                edges.push(Edge::new(EdgeId(eid), *worker, *db, cap(*db)));
                 eid += 1;
             }
         }
@@ -197,8 +159,11 @@ impl Scenario for StressScenario {
             } else {
                 1.0
             };
-            let load = (self.base_load + self.ramp_per_turn * turn as f64) * spike;
-            load.min(self.max_load)
+
+            let t = turn as f64;
+            let ramp = self.ramp_per_turn * (t + 1.0).ln();
+
+            ((self.base_load + ramp) * spike).min(self.max_load)
         } else {
             0.0
         }

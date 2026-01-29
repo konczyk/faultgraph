@@ -85,6 +85,7 @@ pub struct GroupSummary {
     health: GroupHealth,
     health_trend: GroupTrend,
     healthy_nodes: usize,
+    pressure: Vec<f64>,
 }
 
 impl GroupSummary {
@@ -97,6 +98,7 @@ impl GroupSummary {
         health: GroupHealth,
         health_trend: GroupTrend,
         healthy_nodes: usize,
+        pressure: Vec<f64>,
     ) -> Self {
         Self {
             name,
@@ -107,6 +109,7 @@ impl GroupSummary {
             health,
             health_trend,
             healthy_nodes,
+            pressure,
         }
     }
 
@@ -140,5 +143,9 @@ impl GroupSummary {
 
     pub fn healthy_nodes(&self) -> usize {
         self.healthy_nodes
+    }
+
+    pub fn pressure(&self) -> &[f64] {
+        &self.pressure
     }
 }

@@ -89,6 +89,17 @@ pub fn aggregate_groups(
                 .filter(|n_id| states[n_id.index()].is_healthy())
                 .count();
 
+            let mut pressure = vec![0.0; group_set.groups().len()];
+            g.nodes()
+                .iter()
+                .flat_map(|n_id| graph.incoming(*n_id))
+                .for_each(|e_id| {
+                    let load = current_snapshot.edge_load(*e_id, graph);
+                    let edge = graph.edge_by_id(*e_id);
+                    let source_group = group_set.group_by_node_id(edge.from().index());
+                    pressure[source_group] += load;
+                });
+
             GroupSummary::new(
                 g.name().to_string(),
                 curr_avg_util,
@@ -98,6 +109,7 @@ pub fn aggregate_groups(
                 health,
                 health_trend,
                 healthy_nodes,
+                pressure,
             )
         })
         .collect()
@@ -320,5 +332,84 @@ mod tests {
         // 0.0
         assert_eq!(GroupHealth::Failed, *summaries[3].health());
         assert_eq!(GroupTrend::Down, *summaries[3].health_trend());
+    }
+
+    // api0  ← api1    api2
+    //     ↘    ↓     ↙
+    //          db0
+    //       ↙   ↻
+    //   api3
+    #[test]
+    fn test_pressure_grouping() {
+        let api0 = Node::new(NodeId(0), "api0".to_string(), 100.0, 1.0);
+        let api1 = Node::new(NodeId(1), "api1".to_string(), 100.0, 1.0);
+        let api2 = Node::new(NodeId(2), "api2".to_string(), 100.0, 1.0);
+        let api3 = Node::new(NodeId(3), "api3".to_string(), 100.0, 1.0);
+        let db0 = Node::new(NodeId(4), "db0".to_string(), 100.0, 1.0);
+
+        let link1 = Edge::new(EdgeId(0), NodeId(0), NodeId(4), 1.0);
+        let link2 = Edge::new(EdgeId(1), NodeId(1), NodeId(4), 1.0);
+        let link3 = Edge::new(EdgeId(2), NodeId(2), NodeId(4), 2.0);
+        let link4 = Edge::new(EdgeId(3), NodeId(4), NodeId(3), 2.0);
+        let link5 = Edge::new(EdgeId(4), NodeId(4), NodeId(4), 1.0);
+        let link6 = Edge::new(EdgeId(5), NodeId(1), NodeId(0), 1.0);
+
+        let graph = Graph::new(
+            vec![api0, api1, api2, api3, db0],
+            vec![link1, link2, link3, link4, link5, link6],
+        );
+
+        let groupset = GroupSet::new(vec![
+            Group::new("group1".to_string(), vec![NodeId(0), NodeId(3)]),
+            Group::new("group2".to_string(), vec![NodeId(1), NodeId(2)]),
+            Group::new("group3".to_string(), vec![NodeId(4)]),
+        ]);
+
+        let previous_snapshot = Snapshot::new(
+            5,
+            vec![
+                NodeState::new(20.0, 20.0, 0.0, 0.9),
+                NodeState::new(10.0, 10.0, 0.0, 0.8),
+                NodeState::new(20.0, 20.0, 0.0, 0.1),
+                NodeState::new(10.0, 10.0, 0.0, 0.1),
+                NodeState::new(20.0, 20.0, 0.0, 0.9),
+            ],
+            vec![
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+            ],
+            vec![CapacityModifier::new(); 6],
+        );
+
+        let current_snapshot = Snapshot::new(
+            6,
+            vec![
+                NodeState::new(30.0, 30.0, 0.0, 0.9),
+                NodeState::new(20.0, 20.0, 0.0, 0.8),
+                NodeState::new(30.0, 30.0, 0.0, 0.3),
+                NodeState::new(20.0, 20.0, 0.0, 0.2),
+                NodeState::new(30.0, 30.0, 0.0, 0.1),
+            ],
+            vec![
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+                EdgeState::new(true),
+            ],
+            vec![CapacityModifier::new(); 6],
+        );
+
+        let summaries = aggregate_groups(&groupset, &current_snapshot, &previous_snapshot, &graph);
+        let pressure = summaries[2].pressure();
+
+        assert_relative_eq!(30.0, pressure[0]);
+        assert_relative_eq!(40.0, pressure[1]);
+        assert_relative_eq!(10.0, pressure[2]);
     }
 }

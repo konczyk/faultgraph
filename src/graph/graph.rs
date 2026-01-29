@@ -4,16 +4,24 @@ use crate::graph::node::{Node, NodeId};
 pub struct Graph {
     nodes: Vec<Node>,
     edges: Vec<Edge>,
-    adj: Vec<Vec<EdgeId>>,
+    outgoing: Vec<Vec<EdgeId>>,
+    incoming: Vec<Vec<EdgeId>>,
 }
 
 impl Graph {
     pub fn new(nodes: Vec<Node>, edges: Vec<Edge>) -> Self {
-        let mut adj: Vec<Vec<EdgeId>> = vec![Vec::new(); nodes.len()];
+        let mut outgoing: Vec<Vec<EdgeId>> = vec![Vec::new(); nodes.len()];
+        let mut incoming: Vec<Vec<EdgeId>> = vec![Vec::new(); nodes.len()];
         edges.iter().for_each(|e| {
-            adj[e.from().index()].push(e.id());
+            outgoing[e.from().index()].push(e.id());
+            incoming[e.to().index()].push(e.id());
         });
-        Self { nodes, edges, adj }
+        Self {
+            nodes,
+            edges,
+            outgoing,
+            incoming,
+        }
     }
 
     pub fn nodes(&self) -> &[Node] {
@@ -33,7 +41,11 @@ impl Graph {
     }
 
     pub fn outgoing(&self, id: NodeId) -> &[EdgeId] {
-        &self.adj[id.index()]
+        &self.outgoing[id.index()]
+    }
+
+    pub fn incoming(&self, id: NodeId) -> &[EdgeId] {
+        &self.incoming[id.index()]
     }
 
     pub fn node_count(&self) -> usize {
