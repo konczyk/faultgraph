@@ -230,7 +230,7 @@ fn build_group_table(app: &'_ App) -> Table<'_> {
             Row::new(vec![
                 Cell::from(summary.name().to_owned()),
                 Cell::from(Line::from(vec![
-                    Span::from(format!("{:>7.1}", summary.avg_utilization() * 100.0)),
+                    Span::from(format!("{:>7.1}", (summary.avg_utilization().min(1.0)) * 100.0)),
                     Span::from(util_trend),
                 ])),
                 Cell::from(format!(
