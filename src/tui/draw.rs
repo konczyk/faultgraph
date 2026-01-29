@@ -451,6 +451,7 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
     let mut rows = node_states
         .iter()
         .enumerate()
+        .filter(|(i, _)| app.engine.groups().group_by_node_id(*i) == app.selected_group_id())
         .map(|(i, state)| {
             let node = graph.node_by_id(NodeId(i));
             let capacity_mod = app
@@ -461,24 +462,31 @@ fn build_node_table(app: &'_ App) -> Table<'_> {
             (
                 i,
                 if capacity > 0.0 {
-                    state.served() / capacity
+                    (
+                        (if state.is_healthy() {
+                            state.demand() + state.backlog()
+                        } else {
+                            0.0
+                        }) / capacity,
+                        state.served() / capacity,
+                    )
                 } else {
-                    0.0
+                    (0.0, 0.0)
                 },
             )
         })
-        .collect::<Vec<(usize, f64)>>();
-    rows.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        .collect::<Vec<(usize, (f64, f64))>>();
+    rows.sort_by(|a, b| b.1.0.partial_cmp(&a.1.0).unwrap());
 
     Table::new(
-        rows.iter().map(|(i, utilization)| {
+        rows.iter().map(|(i, (_, utilization))| {
             let node = graph.node_by_id(NodeId(*i));
             let state = &node_states[*i];
 
             Row::new(vec![
                 Cell::from(i.to_string()),
                 Cell::from(node.name()),
-                Cell::from(format!("{:>7.1}", utilization * 100.0)),
+                Cell::from(format!("{:>7.1}", (utilization.min(1.0)) * 100.0)),
                 Cell::from(format!("{:>8.1}", state.demand())),
                 Cell::from(format!("{:>6.1}", node.capacity())),
                 Cell::from(format!("{:>6.1}", state.health() * 100.0)),
