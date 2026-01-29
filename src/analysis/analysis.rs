@@ -76,8 +76,8 @@ pub fn aggregate_groups(
             };
 
             let health = match curr_health {
-                n if n > 0.7 => GroupHealth::Ok,
-                n if n > 0.2 => GroupHealth::Degraded,
+                n if n > 0.8 => GroupHealth::Ok,
+                n if n > 0.3 => GroupHealth::Degraded,
                 n if n > 0.0 => GroupHealth::Critical,
                 _ => GroupHealth::Failed,
             };

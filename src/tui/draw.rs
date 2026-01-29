@@ -286,7 +286,12 @@ fn build_details_stats(app: &'_ App) -> Paragraph<'_> {
         .iter()
         .filter(|n| app.engine.current_snapshot().node_states()[n.index()].is_healthy())
         .count();
-    let aggregations = &app.aggregations[group_id].1;
+    let aggregations = &app
+        .aggregations
+        .iter()
+        .find(|(g_id, _)| *g_id == app.selected_group_id())
+        .unwrap()
+        .1;
 
     let mods = app
         .engine
