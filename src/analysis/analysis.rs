@@ -302,7 +302,7 @@ mod tests {
             vec![
                 NodeState::new(0.0, 20.0, 0.0, 0.9),
                 NodeState::new(0.0, 10.0, 0.0, 0.8),
-                NodeState::new(0.0, 20.0, 0.0, 0.3),
+                NodeState::new(0.0, 20.0, 0.0, 0.4),
                 NodeState::new(0.0, 10.0, 0.0, 0.2),
                 NodeState::new(0.0, 20.0, 0.0, 0.1),
                 NodeState::new(0.0, 10.0, 0.0, 0.05),
@@ -323,7 +323,7 @@ mod tests {
         // 0.85
         assert_eq!(GroupHealth::Ok, *summaries[0].health());
         assert_eq!(GroupTrend::Flat, *summaries[0].health_trend());
-        // 0.25
+        // 0.3
         assert_eq!(GroupHealth::Degraded, *summaries[1].health());
         assert_eq!(GroupTrend::Up, *summaries[1].health_trend());
         // 0.2

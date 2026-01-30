@@ -99,7 +99,7 @@ fn build_indicators(app: &'_ App) -> Paragraph<'_> {
         })
         .sum::<f64>();
 
-    let (agg_util, cnt) = app
+    let (agg_served, agg_capacity) = app
         .engine
         .current_snapshot()
         .node_states()
@@ -111,11 +111,15 @@ fn build_indicators(app: &'_ App) -> Paragraph<'_> {
                 .engine
                 .current_snapshot()
                 .capacity_mod(app.engine.groups().group_by_node_id(i));
-            s.served() / (nodes[i].capacity() * capacity_mod.factor())
+            (s.served(), nodes[i].capacity() * capacity_mod.factor())
         })
-        .fold((0.0, 0), |acc, u| (acc.0 + u, acc.1 + 1));
+        .fold((0.0, 0.0), |acc, agg| (acc.0 + agg.0, acc.1 + agg.1));
 
-    let avg_util = if cnt == 0 { 0.0 } else { agg_util / cnt as f64 };
+    let avg_util = if agg_capacity == 0.0 {
+        0.0
+    } else {
+        agg_served / agg_capacity
+    };
 
     let (agg_health, cnt) = app
         .engine
@@ -131,9 +135,9 @@ fn build_indicators(app: &'_ App) -> Paragraph<'_> {
         agg_health / cnt as f64
     };
 
-    let health_style = if avg_health < 0.4 {
+    let health_style = if avg_health < 0.3 {
         Style::default().fg(Color::Red)
-    } else if avg_health < 0.7 {
+    } else if avg_health < 0.8 {
         Style::default().fg(Color::Yellow)
     } else {
         Style::default().fg(Color::Green)
